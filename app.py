@@ -19,6 +19,7 @@ juggler_db = {
 
 # --- 2. 画面設定 & 接続 ---
 st.set_page_config(page_title="Ultimate Juggler Analyzer", layout="wide")
+# Secretsの設定を使って接続
 conn = st.connection("gsheets", type=GSheetsConnection)
 
 st.markdown("""
@@ -97,10 +98,21 @@ elif menu == "収支管理・クラウド保存":
         
         if submit:
             try:
-                df = conn.read()
-                new_data = pd.DataFrame([{"日付": datetime.now().strftime("%Y-%m-%d"), "ホール": hall, "機種": model_name, "投資": toushi, "回収": kaishu, "収支": kaishu-toushi, "回転数": 0, "推定設定": memo}])
+                # 修正ポイント：worksheet名を明示的に指定
+                df = conn.read(worksheet="Sheet1")
+                new_data = pd.DataFrame([{
+                    "日付": datetime.now().strftime("%Y-%m-%d"), 
+                    "ホール": hall, 
+                    "機種": model_name, 
+                    "投資": toushi, 
+                    "回収": kaishu, 
+                    "収支": kaishu-toushi, 
+                    "回転数": 0, 
+                    "推定設定": memo
+                }])
                 updated_df = pd.concat([df, new_data], ignore_index=True)
-                conn.update(data=updated_df)
+                # 修正ポイント：更新先も指定
+                conn.update(worksheet="Sheet1", data=updated_df)
                 st.balloons()
                 st.success("スプレッドシートに保存完了！")
             except Exception as e:
