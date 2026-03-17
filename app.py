@@ -5,16 +5,14 @@ import plotly.graph_objects as go
 import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import requests
 
 st.set_page_config(page_title="Juggler Analyzer PRO", layout="wide")
 st.title("🎰 Juggler Analyzer PRO")
 
 # ======================
-# Google Sheets 接続
+# Google Sheets接続
 # ======================
 def connect_sheet():
-
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
@@ -29,25 +27,39 @@ def connect_sheet():
     return sheet
 
 # ======================
-# LINE通知
+# ホール入力（履歴＋手入力）
 # ======================
-def send_line(msg):
+def get_shop_list():
+    try:
+        sheet = connect_sheet()
+        data = sheet.get_all_values()
 
-    token = st.secrets["LINE_TOKEN"]
+        if len(data) > 1:
+            df = pd.DataFrame(data[1:], columns=data[0])
+            shops = df["ホール"].dropna().unique().tolist()
+            return [""] + sorted(shops)
+        else:
+            return [""]
+    except:
+        return [""]
 
-    url = "https://notify-api.line.me/api/notify"
+shop_list = get_shop_list()
 
-    headers = {"Authorization": f"Bearer {token}"}
-    data = {"message": msg}
+col1, col2 = st.columns(2)
 
-    requests.post(url, headers=headers, data=data)
+with col1:
+    selected_shop = st.selectbox("ホール選択", shop_list)
+
+with col2:
+    new_shop = st.text_input("新規ホール")
+
+shop = new_shop if new_shop != "" else selected_shop
 
 # ======================
-# 基本入力
+# 基本
 # ======================
 machine = st.selectbox("機種",[
-"アイムジャグラーEX",
-"マイジャグラーV"
+"アイムジャグラーEX","マイジャグラーV"
 ])
 
 seat = st.number_input("台番号",0)
@@ -100,7 +112,7 @@ st.header("🍒小役")
 
 grape = counter("🍇ぶどう+1","g")
 cherry = counter("🍒チェリー+1","c")
-middle_cherry = counter("🍒中段+1","mc")
+middle_cherry = counter("🍒中段チェリー+1","mc")
 
 # ======================
 # ボーナス
@@ -116,7 +128,6 @@ reg_total = counter("🔵バケ+1","r")
 st.header("📊確率")
 
 if total_spin > 0:
-
     total = big_total + reg_total
 
     if total > 0:
@@ -131,50 +142,27 @@ if total_spin > 0:
     if grape > 0:
         st.write("ぶどう 1/", round(total_spin/grape,2))
 
+    if cherry > 0:
+        st.write("チェリー 1/", round(total_spin/cherry,2))
+
 # ======================
 # 設定期待度
 # ======================
-st.header("🎰設定期待度")
+st.header("🎯設定期待度")
 
 if total_spin > 0 and reg_total > 0:
-
     reg_rate = total_spin / reg_total
 
-    if reg_rate > 350:
-        level = 20
-    elif reg_rate > 300:
-        level = 40
-    elif reg_rate > 260:
-        level = 60
-    elif reg_rate > 230:
-        level = 80
-    else:
+    if reg_rate < 230:
         level = 100
+    elif reg_rate < 260:
+        level = 80
+    elif reg_rate < 300:
+        level = 60
+    else:
+        level = 30
 
     st.progress(level)
-
-# ======================
-# グラフ
-# ======================
-st.header("📈設定6比較")
-
-if total_spin > 0:
-
-    spins = list(range(500,total_spin+1,500))
-    fig = go.Figure()
-
-    if reg_total > 0:
-        actual = [total_spin/reg_total for _ in spins]
-        fig.add_trace(go.Scatter(x=spins,y=actual,name="実測"))
-
-    fig.add_trace(go.Scatter(
-        x=spins,
-        y=[255 for _ in spins],
-        name="設定6",
-        line=dict(dash="dash")
-    ))
-
-    st.plotly_chart(fig)
 
 # ======================
 # 保存
@@ -192,6 +180,7 @@ if st.button("保存"):
     sheet.append_row([
         now.strftime("%Y-%m-%d %H:%M"),
         machine,
+        shop,
         seat,
         total_spin,
         prev_spin,
@@ -207,105 +196,50 @@ if st.button("保存"):
     st.success("保存完了")
 
 # ======================
-# 判定AI
+# 💰収支フル分析
 # ======================
-def judge(row):
+st.header("💰収支分析")
 
-    try:
-        spin = float(row["現在回転"])
-        reg = float(row["バケ"])
-        grape = float(row["ぶどう"])
-    except:
-        return 0
-
-    if spin==0 or reg==0 or grape==0:
-        return 0
-
-    score = 0
-
-    if spin/reg < 260:
-        score += 50
-    elif spin/reg < 300:
-        score += 30
-
-    if spin/grape < 6.1:
-        score += 30
-    elif spin/grape < 6.3:
-        score += 15
-
-    if spin > 3000:
-        score += 20
-    elif spin > 1500:
-        score += 10
-
-    return score
-
-# ======================
-# 狙い台AI
-# ======================
-st.header("🤖狙い台")
-
-if st.button("狙い台検索"):
+if st.button("収支を見る"):
 
     sheet = connect_sheet()
     data = sheet.get_all_values()
 
     df = pd.DataFrame(data[1:], columns=data[0])
 
-    df["スコア"] = df.apply(judge, axis=1)
-    df = df.sort_values("スコア", ascending=False)
+    if len(df) > 0:
 
-    st.dataframe(df.head(10))
+        df["投資"] = pd.to_numeric(df["投資"], errors="coerce")
+        df["回収"] = pd.to_numeric(df["回収"], errors="coerce")
+        df["収支"] = df["回収"] - df["投資"]
 
-# ======================
-# 通知
-# ======================
-st.header("📲通知")
+        df["日時"] = pd.to_datetime(df["日時"], errors="coerce")
+        df["日付"] = df["日時"].dt.date
+        df["月"] = df["日時"].dt.to_period("M")
+        df["年"] = df["日時"].dt.year
 
-if st.button("狙い台通知"):
+        st.subheader("💰総収支")
+        st.write(int(df["収支"].sum()), "円")
 
-    sheet = connect_sheet()
-    data = sheet.get_all_values()
+        st.subheader("📅日別")
+        daily = df.groupby("日付")["収支"].sum()
+        st.line_chart(daily)
 
-    df = pd.DataFrame(data[1:], columns=data[0])
+        st.subheader("📆月別")
+        monthly = df.groupby("月")["収支"].sum()
+        st.bar_chart(monthly)
 
-    df["スコア"] = df.apply(judge, axis=1)
+        st.subheader("📊年別")
+        yearly = df.groupby("年")["収支"].sum()
+        st.bar_chart(yearly)
 
-    hot = df[df["スコア"] > 70]
+        st.subheader("🏠ホール別")
+        shop_profit = df.groupby("ホール")["収支"].sum().sort_values(ascending=False)
+        st.bar_chart(shop_profit)
 
-    for _, row in hot.iterrows():
+        st.subheader("🎯勝率")
+        win_rate = (df["収支"] > 0).mean() * 100
+        st.write(round(win_rate,1), "%")
 
-        msg = f"""
-🔥狙い台🔥
-台{row["台番号"]}
-回転{row["現在回転"]}
-スコア{round(row["スコア"],1)}
-"""
-
-        send_line(msg)
-
-    st.success("通知完了")
-
-# ======================
-# 曜日分析
-# ======================
-st.header("📅曜日分析")
-
-if st.button("曜日分析"):
-
-    sheet = connect_sheet()
-    data = sheet.get_all_values()
-
-    df = pd.DataFrame(data[1:], columns=data[0])
-
-    df["日時"] = pd.to_datetime(df["日時"], errors="coerce")
-    df["曜日"] = df["日時"].dt.day_name()
-
-    df["回転"] = pd.to_numeric(df["現在回転"], errors="coerce")
-    df["バケ"] = pd.to_numeric(df["バケ"], errors="coerce")
-
-    df["バケ確率"] = df["回転"] / df["バケ"]
-
-    summary = df.groupby("曜日")["バケ確率"].mean()
-
-    st.dataframe(summary)
+        st.subheader("📈累計")
+        st.line_chart(daily.cumsum())
