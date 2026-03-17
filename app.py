@@ -5,13 +5,12 @@ import plotly.graph_objects as go
 import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import json
 
 st.set_page_config(page_title="Juggler Analyzer", layout="wide")
 st.title("🎰 Juggler Analyzer")
 
 # ======================
-# Google Sheets 接続（Secrets版）
+# Google Sheets接続
 # ======================
 
 def connect_sheet():
@@ -20,10 +19,11 @@ def connect_sheet():
         "https://www.googleapis.com/auth/drive"
     ]
 
-    creds_dict = st.secrets["gcp_service_account"]
-    creds = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(creds)
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        st.secrets["gcp_service_account"], scope
+    )
 
+    client = gspread.authorize(creds)
     sheet = client.open("juggler_data").sheet1
     return sheet
 
@@ -68,6 +68,39 @@ total_spin = spin + prev_spin
 st.write("総回転:", total_spin)
 
 # ======================
+# 前任者ボーナス
+# ======================
+
+st.header("👤前任者ボーナス")
+
+prev_big = st.number_input("前任者ビック", 0)
+prev_reg = st.number_input("前任者バケ", 0)
+
+prev_bonus = prev_big + prev_reg
+
+# ======================
+# 前任者ぶどう逆算（理論）
+# ======================
+
+st.subheader("🍇前任者ぶどう逆算（理論）")
+
+if prev_spin > 0:
+
+    # 平均値（実戦寄り）
+    CHERRY_RATE = 33
+    REPLAY_RATE = 7.7
+
+    cherry_est = prev_spin / CHERRY_RATE
+    replay_est = prev_spin / REPLAY_RATE
+    bonus_est = prev_bonus
+
+    grape_est = prev_spin - (cherry_est + replay_est + bonus_est)
+
+    if grape_est > 0:
+        st.write("推定ぶどう回数:", int(grape_est))
+        st.write("推定ぶどう確率 1/", round(prev_spin / grape_est, 2))
+
+# ======================
 # 小役
 # ======================
 
@@ -78,7 +111,7 @@ cherry = st.number_input("🍒チェリー", 0)
 middle_cherry = st.number_input("中段チェリー", 0)
 
 # ======================
-# BIG（ビック）
+# ビック
 # ======================
 
 st.header("🔴ビック")
@@ -89,7 +122,7 @@ big_pierrot = st.number_input("ピエロビック", 0)
 big_one = st.number_input("一枚役ビック", 0)
 
 # ======================
-# REG（バケ）
+# バケ
 # ======================
 
 st.header("🔵バケ")
@@ -105,6 +138,7 @@ reg_one = st.number_input("一枚役バケ", 0)
 
 big_total = big_single + big_cherry + big_pierrot + big_one
 reg_total = reg_single + reg_cherry + reg_pierrot + reg_one
+total_bonus = big_total + reg_total
 
 # ======================
 # 確率
@@ -113,8 +147,6 @@ reg_total = reg_single + reg_cherry + reg_pierrot + reg_one
 st.header("📊確率")
 
 if total_spin > 0:
-
-    total_bonus = big_total + reg_total
 
     if total_bonus > 0:
         st.write("合算 1/", round(total_spin / total_bonus, 1))
@@ -141,7 +173,7 @@ cherry_bonus = big_cherry + reg_cherry
 
 if cherry > 0:
     rate = cherry_bonus / cherry * 100
-    st.write("チェリー重複率:", round(rate, 2), "%")
+    st.write("重複率:", round(rate, 2), "%")
 
 # ======================
 # 収支
@@ -211,16 +243,10 @@ if st.button("履歴読み込み"):
         st.write("総収支:", df["差枚"].sum())
         st.write("勝率:", round(len(df[df["差枚"] > 0]) / len(df) * 100, 1), "%")
 
-        # 日別
         df["日付"] = df["日時"].str[:10]
-        st.write("日別収支")
         st.bar_chart(df.groupby("日付")["差枚"].sum())
 
-        # 月別
         df["月"] = df["日時"].str[:7]
-        st.write("月別収支")
         st.bar_chart(df.groupby("月")["差枚"].sum())
 
-        # 店別
-        st.write("店別収支")
         st.bar_chart(df.groupby("ホール")["差枚"].sum())
