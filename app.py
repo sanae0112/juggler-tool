@@ -23,7 +23,7 @@ def connect_sheet():
     return client.open("juggler_data").sheet1
 
 # ======================
-# カウンター（修正版）
+# カウンター（衝突防止版）
 # ======================
 def counter(label, key):
 
@@ -71,7 +71,7 @@ with c2:
 shop = new_shop if new_shop else selected_shop
 
 # ======================
-# 基本情報
+# 基本
 # ======================
 machine = st.selectbox("機種", ["アイムジャグラーEX", "マイジャグラーV"])
 seat = st.number_input("台番号", 0)
@@ -155,6 +155,29 @@ if total_spin > 0:
 
     if cherry > 0:
         st.write("チェリー 1/", round(total_spin / cherry, 2))
+
+# ======================
+# 🍒チェリー重複率
+# ======================
+st.header("🍒チェリー重複率")
+
+if cherry > 0:
+
+    cherry_bonus = b2 + r2
+    rate = cherry_bonus / cherry * 100
+
+    st.write("重複回数", cherry_bonus)
+    st.write("重複率", round(rate,2), "%")
+
+    if rate > 15:
+        st.success("🔥高設定の可能性大")
+    elif rate > 10:
+        st.info("👍中間以上あり")
+    else:
+        st.warning("⚠️弱め")
+
+else:
+    st.write("チェリー0")
 
 # ======================
 # 保存
