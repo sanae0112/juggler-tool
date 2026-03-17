@@ -12,7 +12,6 @@ st.title("🎰 Juggler Analyzer")
 # ======================
 # Google Sheets接続
 # ======================
-
 def connect_sheet():
     scope = [
         "https://spreadsheets.google.com/feeds",
@@ -30,7 +29,6 @@ def connect_sheet():
 # ======================
 # 機種
 # ======================
-
 machine = st.selectbox("機種", [
     "アイムジャグラーEX",
     "マイジャグラーV",
@@ -45,7 +43,6 @@ machine = st.selectbox("機種", [
 # ======================
 # ホール
 # ======================
-
 st.header("🏠ホール")
 
 shop = st.text_input("ホール名")
@@ -58,7 +55,6 @@ if shop == "":
 # ======================
 # 回転数
 # ======================
-
 st.header("🎯回転数")
 
 spin = st.number_input("現在回転", 0)
@@ -68,33 +64,42 @@ total_spin = spin + prev_spin
 st.write("総回転:", total_spin)
 
 # ======================
-# 前任者ボーナス
+# 前任者データ
 # ======================
-
-st.header("👤前任者ボーナス")
+st.header("👤前任者データ")
 
 prev_big = st.number_input("前任者ビック", 0)
 prev_reg = st.number_input("前任者バケ", 0)
-
-prev_bonus = prev_big + prev_reg
+prev_diff = st.number_input("前任者差枚", 0)
 
 # ======================
-# 前任者ぶどう逆算（理論）
+# 前任者ぶどう逆算（最強版）
 # ======================
-
-st.subheader("🍇前任者ぶどう逆算（理論）")
+st.subheader("🍇前任者ぶどう逆算（差枚＋理論）")
 
 if prev_spin > 0:
 
-    # 平均値（実戦寄り）
-    CHERRY_RATE = 33
-    REPLAY_RATE = 7.7
+    BIG_PAY = 240
+    REG_PAY = 96
+    GRAPE_PAY = 8
 
-    cherry_est = prev_spin / CHERRY_RATE
-    replay_est = prev_spin / REPLAY_RATE
-    bonus_est = prev_bonus
+    # ボーナス払い出し
+    bonus_out = (prev_big * BIG_PAY) + (prev_reg * REG_PAY)
 
-    grape_est = prev_spin - (cherry_est + replay_est + bonus_est)
+    # 残り差枚
+    remain = prev_diff - bonus_out
+
+    # 差枚ベースぶどう
+    grape_from_diff = remain / GRAPE_PAY if GRAPE_PAY > 0 else 0
+
+    # 理論ぶどう
+    theoretical_grape = prev_spin / 6.2
+
+    # ハイブリッド
+    grape_est = (grape_from_diff + theoretical_grape) / 2
+
+    if grape_est < 0:
+        grape_est = 0
 
     if grape_est > 0:
         st.write("推定ぶどう回数:", int(grape_est))
@@ -103,7 +108,6 @@ if prev_spin > 0:
 # ======================
 # 小役
 # ======================
-
 st.header("🍒小役")
 
 grape = st.number_input("🍇ぶどう", 0)
@@ -113,7 +117,6 @@ middle_cherry = st.number_input("中段チェリー", 0)
 # ======================
 # ビック
 # ======================
-
 st.header("🔴ビック")
 
 big_single = st.number_input("単独ビック", 0)
@@ -124,7 +127,6 @@ big_one = st.number_input("一枚役ビック", 0)
 # ======================
 # バケ
 # ======================
-
 st.header("🔵バケ")
 
 reg_single = st.number_input("単独バケ", 0)
@@ -135,7 +137,6 @@ reg_one = st.number_input("一枚役バケ", 0)
 # ======================
 # 合計
 # ======================
-
 big_total = big_single + big_cherry + big_pierrot + big_one
 reg_total = reg_single + reg_cherry + reg_pierrot + reg_one
 total_bonus = big_total + reg_total
@@ -143,7 +144,6 @@ total_bonus = big_total + reg_total
 # ======================
 # 確率
 # ======================
-
 st.header("📊確率")
 
 if total_spin > 0:
@@ -166,7 +166,6 @@ if total_spin > 0:
 # ======================
 # チェリー重複率
 # ======================
-
 st.header("🍒チェリー重複率")
 
 cherry_bonus = big_cherry + reg_cherry
@@ -178,7 +177,6 @@ if cherry > 0:
 # ======================
 # 収支
 # ======================
-
 st.header("💰収支")
 
 investment = st.number_input("投資", 0)
@@ -190,11 +188,9 @@ st.write("差枚:", profit)
 # ======================
 # 保存
 # ======================
-
 if st.button("保存"):
 
     sheet = connect_sheet()
-
     now = datetime.datetime.now()
 
     sheet.append_row([
@@ -224,14 +220,12 @@ if st.button("保存"):
 # ======================
 # 履歴分析
 # ======================
-
 st.header("📈履歴分析")
 
 if st.button("履歴読み込み"):
 
     sheet = connect_sheet()
     data = sheet.get_all_records()
-
     df = pd.DataFrame(data)
 
     if len(df) > 0:
