@@ -4,7 +4,7 @@ import numpy as np
 import plotly.graph_objects as go
 import datetime
 import gspread
-from oauth2client.service_account import ServiceAccountCredentials
+from google.oauth2.service_account import Credentials
 
 st.set_page_config(page_title="Juggler Analyzer", layout="wide")
 
@@ -17,13 +17,13 @@ st.title("🎰 Juggler Analyzer")
 def connect_sheet():
 
     scope = [
-        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive"
     ]
 
-    creds = ServiceAccountCredentials.from_json_keyfile_name(
-        "credentials.json",
-        scope
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=scope
     )
 
     client = gspread.authorize(creds)
@@ -173,7 +173,7 @@ if spin > 0:
         st.write("チェリー 1/", round(spin/cherry,1))
 
 # ======================
-# 確率推移グラフ
+# 確率推移
 # ======================
 
 st.header("📈確率推移")
@@ -188,49 +188,12 @@ if spin > 0:
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(x=spins,y=grape_rate,mode="lines",name="ぶどう"))
-
     fig.add_trace(go.Scatter(x=spins,y=reg_rate,mode="lines",name="REG"))
 
     st.plotly_chart(fig)
 
 # ======================
-# ぶどう設定ライン
-# ======================
-
-st.header("🍇設定別ぶどうライン")
-
-GRAPE_SETTING = {
-1:6.35,
-2:6.30,
-3:6.25,
-4:6.20,
-5:6.15,
-6:6.05
-}
-
-if spin>0 and grape>0:
-
-    spins=list(range(500,spin+1,500))
-
-    fig=go.Figure()
-
-    actual=[spin/grape for _ in spins]
-
-    fig.add_trace(go.Scatter(x=spins,y=actual,mode="lines",name="実測"))
-
-    for s,v in GRAPE_SETTING.items():
-
-        fig.add_trace(go.Scatter(
-            x=spins,
-            y=[v for _ in spins],
-            mode="lines",
-            name=f"設定{s}"
-        ))
-
-    st.plotly_chart(fig)
-
-# ======================
-# ベイズAI設定推測
+# AI設定推測
 # ======================
 
 st.header("🤖設定推測AI")
@@ -254,9 +217,7 @@ def estimate(spin,reg):
     for s,p in REG_SETTING.items():
 
         lam=spin/p
-
         prob=np.exp(-lam)*lam**reg
-
         probs[s]=prob
 
     total=sum(probs.values())
@@ -320,10 +281,10 @@ if st.button("保存"):
     st.success("保存しました")
 
 # ======================
-# 履歴分析
+# 履歴
 # ======================
 
-st.header("🏠ホール分析")
+st.header("📊履歴分析")
 
 if st.button("履歴読み込み"):
 
@@ -334,19 +295,3 @@ if st.button("履歴読み込み"):
     df=pd.DataFrame(data)
 
     st.dataframe(df)
-
-    if len(df)>0:
-
-        df["REG確率"]=df["回転"]/(
-        df["単独REG"]+
-        df["チェリーREG"]+
-        df["レアチェリーREG"]+
-        df["ピエロREG"]+
-        df["一枚役REG"]
-        )
-
-        high=df[df["REG確率"]<280]
-
-        rate=len(high)/len(df)*100
-
-        st.write("高設定割合",round(rate,1),"%")
