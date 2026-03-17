@@ -23,17 +23,20 @@ def connect_sheet():
     return client.open("juggler_data").sheet1
 
 # ======================
-# カウンター関数
+# カウンター（修正版）
 # ======================
-def counter(label,key):
-    if key not in st.session_state:
-        st.session_state[key]=0
+def counter(label, key):
 
-    c1,c2=st.columns([1,2])
+    if key not in st.session_state:
+        st.session_state[key] = 0
+
+    button_key = key + "_btn"
+
+    c1, c2 = st.columns([1,2])
 
     with c1:
-        if st.button(label,key=key):
-            st.session_state[key]+=1
+        if st.button(label, key=button_key):
+            st.session_state[key] += 1
 
     with c2:
         st.write(st.session_state[key])
@@ -41,13 +44,14 @@ def counter(label,key):
     return st.session_state[key]
 
 # ======================
-# ホール入力
+# ホール入力（履歴＋手入力）
 # ======================
 def get_shop_list():
     try:
         sheet = connect_sheet()
         data = sheet.get_all_values()
-        if len(data)>1:
+
+        if len(data) > 1:
             df = pd.DataFrame(data[1:], columns=data[0])
             return [""] + sorted(df["ホール"].dropna().unique())
     except:
@@ -56,21 +60,21 @@ def get_shop_list():
 
 shops = get_shop_list()
 
-c1,c2 = st.columns(2)
+c1, c2 = st.columns(2)
 
 with c1:
-    selected = st.selectbox("ホール選択", shops)
+    selected_shop = st.selectbox("ホール選択", shops)
 
 with c2:
-    new = st.text_input("新規ホール")
+    new_shop = st.text_input("新規ホール")
 
-shop = new if new else selected
+shop = new_shop if new_shop else selected_shop
 
 # ======================
-# 基本
+# 基本情報
 # ======================
-machine = st.selectbox("機種",["アイム","マイ"])
-seat = st.number_input("台番号",0)
+machine = st.selectbox("機種", ["アイムジャグラーEX", "マイジャグラーV"])
+seat = st.number_input("台番号", 0)
 
 # ======================
 # 回転
@@ -80,13 +84,18 @@ st.header("🎮回転")
 if "spin" not in st.session_state:
     st.session_state.spin = 0
 
-if st.button("+1"):
-    st.session_state.spin += 1
-if st.button("+10"):
-    st.session_state.spin += 10
+col1, col2 = st.columns(2)
 
-spin = st.number_input("現在回転",0,value=st.session_state.spin)
-prev_spin = st.number_input("前任者回転",0)
+with col1:
+    if st.button("+1", key="spin1"):
+        st.session_state.spin += 1
+
+with col2:
+    if st.button("+10", key="spin10"):
+        st.session_state.spin += 10
+
+spin = st.number_input("現在回転", 0, value=st.session_state.spin)
+prev_spin = st.number_input("前任者回転", 0)
 
 total_spin = spin + prev_spin
 
@@ -95,19 +104,19 @@ total_spin = spin + prev_spin
 # ======================
 st.header("🍒小役")
 
-grape = counter("🍇ぶどう","g")
-cherry = counter("🍒チェリー","c")
-middle = counter("🍒中段チェリー","mc")
+grape = counter("🍇ぶどう+1", "g")
+cherry = counter("🍒チェリー+1", "c")
+middle_cherry = counter("🍒中段チェリー+1", "mc")
 
 # ======================
 # ビック内訳
 # ======================
 st.header("🔴ビック内訳")
 
-b1 = counter("単独ビック","b1")
-b2 = counter("チェリービック","b2")
-b3 = counter("ピエロビック","b3")
-b4 = counter("一枚役ビック","b4")
+b1 = counter("単独ビック", "b1")
+b2 = counter("チェリービック", "b2")
+b3 = counter("ピエロビック", "b3")
+b4 = counter("一枚役ビック", "b4")
 
 big_total = b1 + b2 + b3 + b4
 
@@ -116,10 +125,10 @@ big_total = b1 + b2 + b3 + b4
 # ======================
 st.header("🔵バケ内訳")
 
-r1 = counter("単独バケ","r1")
-r2 = counter("チェリーバケ","r2")
-r3 = counter("ピエロバケ","r3")
-r4 = counter("一枚役バケ","r4")
+r1 = counter("単独バケ", "r1")
+r2 = counter("チェリーバケ", "r2")
+r3 = counter("ピエロバケ", "r3")
+r4 = counter("一枚役バケ", "r4")
 
 reg_total = r1 + r2 + r3 + r4
 
@@ -128,34 +137,34 @@ reg_total = r1 + r2 + r3 + r4
 # ======================
 st.header("📊確率")
 
-if total_spin>0:
+if total_spin > 0:
 
     total = big_total + reg_total
 
-    if total>0:
-        st.write("合算 1/", round(total_spin/total,1))
+    if total > 0:
+        st.write("合算 1/", round(total_spin / total, 1))
 
-    if big_total>0:
-        st.write("ビック 1/", round(total_spin/big_total,1))
+    if big_total > 0:
+        st.write("ビック 1/", round(total_spin / big_total, 1))
 
-    if reg_total>0:
-        st.write("バケ 1/", round(total_spin/reg_total,1))
+    if reg_total > 0:
+        st.write("バケ 1/", round(total_spin / reg_total, 1))
 
-    if grape>0:
-        st.write("ぶどう 1/", round(total_spin/grape,2))
+    if grape > 0:
+        st.write("ぶどう 1/", round(total_spin / grape, 2))
 
-    if cherry>0:
-        st.write("チェリー 1/", round(total_spin/cherry,2))
+    if cherry > 0:
+        st.write("チェリー 1/", round(total_spin / cherry, 2))
 
 # ======================
 # 保存
 # ======================
 st.header("💾保存")
 
-investment = st.number_input("投資",0)
-recovery = st.number_input("回収",0)
+investment = st.number_input("投資", 0)
+recovery = st.number_input("回収", 0)
 
-if st.button("保存"):
+if st.button("保存", key="save"):
 
     sheet = connect_sheet()
     now = datetime.datetime.now()
@@ -169,9 +178,9 @@ if st.button("保存"):
         prev_spin,
         grape,
         cherry,
-        middle,
-        b1,b2,b3,b4,
-        r1,r2,r3,r4,
+        middle_cherry,
+        b1, b2, b3, b4,
+        r1, r2, r3, r4,
         investment,
         recovery
     ])
@@ -179,17 +188,18 @@ if st.button("保存"):
     st.success("保存完了")
 
 # ======================
-# 収支分析
+# 💰収支分析
 # ======================
 st.header("💰収支分析")
 
-if st.button("収支を見る"):
+if st.button("収支を見る", key="profit"):
 
     sheet = connect_sheet()
     data = sheet.get_all_values()
+
     df = pd.DataFrame(data[1:], columns=data[0])
 
-    if len(df)>0:
+    if len(df) > 0:
 
         df["投資"] = pd.to_numeric(df["投資"], errors="coerce")
         df["回収"] = pd.to_numeric(df["回収"], errors="coerce")
@@ -200,6 +210,25 @@ if st.button("収支を見る"):
         df["月"] = df["日時"].dt.to_period("M")
         df["年"] = df["日時"].dt.year
 
-        st.write("総収支", int(df["収支"].sum()))
+        st.subheader("総収支")
+        st.write(int(df["収支"].sum()), "円")
 
-        st.line_chart(df.groupby("日付")["収支"].sum().cumsum())
+        st.subheader("日別")
+        daily = df.groupby("日付")["収支"].sum()
+        st.line_chart(daily)
+
+        st.subheader("月別")
+        st.bar_chart(df.groupby("月")["収支"].sum())
+
+        st.subheader("年別")
+        st.bar_chart(df.groupby("年")["収支"].sum())
+
+        st.subheader("ホール別")
+        st.bar_chart(df.groupby("ホール")["収支"].sum())
+
+        st.subheader("勝率")
+        win_rate = (df["収支"] > 0).mean() * 100
+        st.write(round(win_rate,1), "%")
+
+        st.subheader("累計")
+        st.line_chart(daily.cumsum())
