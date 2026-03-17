@@ -1,418 +1,316 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-import plotly.express as px
-from scipy.stats import binom
+import plotly.graph_objects as go
+import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import datetime
 
-st.set_page_config(page_title="Juggler Analyzer PRO", layout="wide")
+st.set_page_config(page_title="Juggler Analyzer",layout="wide")
 
-st.title("🎰 Juggler Analyzer PRO")
+st.title("🎰 Juggler Analyzer")
 
-# ==============================
+# ======================
 # Google Sheets 接続
-# ==============================
+# ======================
 
 def connect_sheet():
 
-    try:
-        scope = [
-            "https://spreadsheets.google.com/feeds",
-            "https://www.googleapis.com/auth/drive"
-        ]
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive"
+    ]
 
-        creds = ServiceAccountCredentials.from_json_keyfile_name(
-            "credentials.json", scope
-        )
+    creds = ServiceAccountCredentials.from_json_keyfile_name(
+        "credentials.json",
+        scope
+    )
 
-        client = gspread.authorize(creds)
-        sheet = client.open("juggler_data").sheet1
+    client = gspread.authorize(creds)
 
-        return sheet
+    sheet = client.open("juggler_data").sheet1
 
-    except:
-        return None
+    return sheet
 
+# ======================
+# 機種
+# ======================
 
-# ==============================
-# ジャグラースペック
-# ==============================
-
-specs = {
-
-"アイムジャグラーEX":{
-"big":[273,270,266,254,240,229],
-"reg":[439,399,331,290,268,229],
-"grape":[6.14,6.10,6.05,6.02,5.98,5.95],
-"payout":[97,98,101,104,107,109]
-},
-
-"マイジャグラーV":{
-"big":[273,270,266,254,240,229],
-"reg":[409,399,331,290,268,229],
-"grape":[6.10,6.07,6.03,6.00,5.96,5.92],
-"payout":[97,98,101,104,107,109]
-},
-
-"ファンキージャグラー2":{
-"big":[273,270,266,254,240,229],
-"reg":[439,399,331,290,268,229],
-"grape":[6.14,6.10,6.05,6.02,5.98,5.95],
-"payout":[97,98,101,104,107,109]
-},
-
-"ゴーゴージャグラー3":{
-"big":[273,270,266,254,240,229],
-"reg":[439,399,331,290,268,229],
-"grape":[6.14,6.10,6.05,6.02,5.98,5.95],
-"payout":[97,98,101,104,107,109]
-}
-
-}
-
-machine = st.selectbox("機種", list(specs.keys()))
-
-# ==============================
-# セッション初期化
-# ==============================
-
-keys = [
-"spin","big","reg","grape",
-"investment","recovery",
-"history","setting_history"
+machine = st.selectbox(
+"機種",
+[
+"アイムジャグラーEX",
+"マイジャグラーV",
+"ファンキージャグラー2",
+"ゴーゴージャグラー3",
+"ハッピージャグラーV3",
+"ミスタージャグラー",
+"ウルトラミラクルジャグラー",
+"ジャグラーガールズSS"
 ]
+)
 
-for k in keys:
-
-    if k not in st.session_state:
-
-        if k in ["history","setting_history"]:
-            st.session_state[k] = []
-        else:
-            st.session_state[k] = 0
-
-
-# ==============================
+# ======================
 # 実戦カウンター
-# ==============================
+# ======================
 
-st.header("📱 実戦カウンター")
+st.header("📱実戦カウンター")
 
-c1,c2,c3,c4 = st.columns(4)
+if "spin_count" not in st.session_state:
+    st.session_state.spin_count = 0
 
-with c1:
+if st.button("回転 +1"):
+    st.session_state.spin_count += 1
 
-    if st.button("+10回転"):
-        st.session_state.spin += 10
+st.write("現在回転",st.session_state.spin_count)
 
-    if st.button("+100回転"):
-        st.session_state.spin += 100
+spin = st.number_input("回転数",0,value=st.session_state.spin_count)
 
+# ======================
+# 小役
+# ======================
 
-with c2:
+st.header("小役")
 
-    if st.button("🍇ぶどう"):
-        st.session_state.grape += 1
+col1,col2,col3 = st.columns(3)
 
+with col1:
+    grape = st.number_input("🍇ぶどう",0)
 
-with c3:
+with col2:
+    cherry = st.number_input("🍒チェリー",0)
 
-    if st.button("BIG"):
-        st.session_state.big += 1
+with col3:
+    cherry_no = st.number_input("非重複チェリー",0)
 
+middle_cherry = st.number_input("中段チェリー",0)
 
-with c4:
+# ======================
+# BIG
+# ======================
 
-    if st.button("REG"):
-        st.session_state.reg += 1
+st.header("BIG内訳")
 
+b1,b2,b3 = st.columns(3)
 
-spin = st.session_state.spin
-big = st.session_state.big
-reg = st.session_state.reg
-grape = st.session_state.grape
+with b1:
+    big_single = st.number_input("単独BIG",0)
 
-st.write({
-"回転":spin,
-"BIG":big,
-"REG":reg,
-"ぶどう":grape
-})
+with b2:
+    big_cherry = st.number_input("チェリーBIG",0)
 
-# ==============================
-# 確率表示
-# ==============================
+with b3:
+    big_rare = st.number_input("レアチェリーBIG",0)
 
-st.header("📊 確率")
+b4,b5 = st.columns(2)
 
-c1,c2,c3,c4 = st.columns(4)
+with b4:
+    big_pierrot = st.number_input("ピエロBIG",0)
 
-with c1:
+with b5:
+    big_one = st.number_input("一枚役BIG",0)
 
-    if big>0:
-        st.metric("BIG",f"1/{spin/big:.1f}")
+# ======================
+# REG
+# ======================
 
-with c2:
+st.header("REG内訳")
 
-    if reg>0:
-        st.metric("REG",f"1/{spin/reg:.1f}")
+r1,r2,r3 = st.columns(3)
 
-with c3:
+with r1:
+    reg_single = st.number_input("単独REG",0)
 
-    if big+reg>0:
-        st.metric("合算",f"1/{spin/(big+reg):.1f}")
+with r2:
+    reg_cherry = st.number_input("チェリーREG",0)
 
-with c4:
+with r3:
+    reg_rare = st.number_input("レアチェリーREG",0)
 
-    if grape>0:
-        st.metric("ぶどう",f"1/{spin/grape:.2f}")
+r4,r5 = st.columns(2)
 
+with r4:
+    reg_pierrot = st.number_input("ピエロREG",0)
 
-# ==============================
-# ベイズAI
-# ==============================
+with r5:
+    reg_one = st.number_input("一枚役REG",0)
 
-st.header("🤖 設定推測AI")
+# ======================
+# 合計
+# ======================
 
+big_total = big_single+big_cherry+big_rare+big_pierrot+big_one
+reg_total = reg_single+reg_cherry+reg_rare+reg_pierrot+reg_one
 
-def bayes():
+# ======================
+# 確率
+# ======================
 
-    results=[]
-
-    for i in range(6):
-
-        big_rate = 1/specs[machine]["big"][i]
-        reg_rate = 1/specs[machine]["reg"][i]
-        grape_rate = 1/specs[machine]["grape"][i]
-
-        p_big = binom.pmf(big,spin,big_rate)
-        p_reg = binom.pmf(reg,spin,reg_rate)
-        p_grape = binom.pmf(grape,spin,grape_rate)
-
-        likelihood = p_big*p_reg*p_grape
-
-        results.append(likelihood)
-
-    results = np.array(results)
-
-    if results.sum()==0:
-        return np.ones(6)/6
-
-    return results/results.sum()
-
+st.header("📊確率")
 
 if spin>0:
 
-    probs = bayes()
+    total = big_total+reg_total
 
-    df = pd.DataFrame({
-        "設定":[1,2,3,4,5,6],
-        "確率":probs
-    })
+    if total>0:
+        st.write("合算 1/",round(spin/total,1))
 
-    st.bar_chart(df.set_index("設定"))
+    if big_total>0:
+        st.write("BIG 1/",round(spin/big_total,1))
 
-    high = probs[3:].sum()
+    if reg_total>0:
+        st.write("REG 1/",round(spin/reg_total,1))
 
-    st.metric("設定4以上確率",f"{high*100:.1f}%")
+    if grape>0:
+        st.write("ぶどう 1/",round(spin/grape,1))
 
+    if cherry>0:
+        st.write("チェリー 1/",round(spin/cherry,1))
 
-# ==============================
-# 尤度スコア
-# ==============================
+# ======================
+# グラフ
+# ======================
 
-st.header("📈 尤度スコア")
+st.header("📈確率推移")
 
+if spin>0:
 
-def likelihood():
+    spins=list(range(500,spin+1,500))
 
-    scores=[]
+    grape_rate=[spin/grape if grape>0 else 0 for _ in spins]
+    reg_rate=[spin/reg_total if reg_total>0 else 0 for _ in spins]
 
-    for i in range(6):
+    fig=go.Figure()
 
-        big_rate = 1/specs[machine]["big"][i]
-        reg_rate = 1/specs[machine]["reg"][i]
-        grape_rate = 1/specs[machine]["grape"][i]
+    fig.add_trace(go.Scatter(
+        x=spins,
+        y=grape_rate,
+        mode="lines",
+        name="ぶどう"
+    ))
 
-        p_big = binom.pmf(big,spin,big_rate)
-        p_reg = binom.pmf(reg,spin,reg_rate)
-        p_grape = binom.pmf(grape,spin,grape_rate)
+    fig.add_trace(go.Scatter(
+        x=spins,
+        y=reg_rate,
+        mode="lines",
+        name="REG"
+    ))
 
-        score = np.log(p_big+1e-10)+np.log(p_reg+1e-10)+np.log(p_grape+1e-10)
+    st.plotly_chart(fig)
 
-        scores.append(score)
+# ======================
+# ベイズAI
+# ======================
 
-    return scores
+st.header("🤖設定推測AI")
 
+REG_SETTING={
+1:439,
+2:399,
+3:331,
+4:315,
+5:255,
+6:255
+}
 
-scores = likelihood()
+def estimate(spin,reg):
 
-df2 = pd.DataFrame({
-"設定":[1,2,3,4,5,6],
-"尤度":scores
-})
+    if reg==0:
+        return None
 
-st.bar_chart(df2.set_index("設定"))
+    probs={}
 
+    for s,p in REG_SETTING.items():
 
-# ==============================
-# 期待機械割
-# ==============================
+        lam=spin/p
 
-st.header("💰 期待機械割")
+        prob=np.exp(-lam)*lam**reg
 
-payout = np.array(specs[machine]["payout"])
+        probs[s]=prob
 
-ev = (probs*payout).sum()
+    total=sum(probs.values())
 
-st.metric("期待機械割",f"{ev:.2f}%")
+    for s in probs:
+        probs[s]=probs[s]/total*100
 
+    return probs
 
-# ==============================
-# ヤメ時AI
-# ==============================
+if spin>0:
 
-st.header("🧠 ヤメ時AI")
+    result=estimate(spin,reg_total)
 
-if ev > 102:
+    if result:
 
-    st.success("続行推奨")
+        df=pd.DataFrame(
+            list(result.items()),
+            columns=["設定","確率%"]
+        )
 
-elif ev > 100:
+        st.bar_chart(df.set_index("設定"))
 
-    st.warning("様子見")
+        high=result.get(4,0)+result.get(5,0)+result.get(6,0)
 
-else:
+        st.write("設定4以上期待度",round(high,1),"%")
 
-    st.error("ヤメ推奨")
+# ======================
+# 保存
+# ======================
 
+st.header("💾保存")
 
-# ==============================
-# 投資管理
-# ==============================
+investment=st.number_input("投資",0)
+recovery=st.number_input("回収",0)
 
-st.header("💸 投資")
+if st.button("データ保存"):
 
-c1,c2 = st.columns(2)
+    sheet=connect_sheet()
 
-with c1:
+    now=datetime.datetime.now()
 
-    invest = st.number_input("投資",0,100000,st.session_state.investment)
+    sheet.append_row([
+        now.strftime("%Y-%m-%d %H:%M"),
+        machine,
+        spin,
+        grape,
+        cherry,
+        cherry_no,
+        middle_cherry,
+        big_single,
+        big_cherry,
+        big_rare,
+        big_pierrot,
+        big_one,
+        reg_single,
+        reg_cherry,
+        reg_rare,
+        reg_pierrot,
+        reg_one,
+        investment,
+        recovery
+    ])
 
-    st.session_state.investment = invest
+    st.success("保存完了")
 
-with c2:
+# ======================
+# 履歴分析
+# ======================
 
-    recovery = st.number_input("回収",0,100000,st.session_state.recovery)
+st.header("📊履歴分析")
 
-    st.session_state.recovery = recovery
+if st.button("履歴読み込み"):
 
-diff = recovery-invest
+    sheet=connect_sheet()
 
-st.metric("差枚",diff)
+    data=sheet.get_all_records()
 
-
-# ==============================
-# データ記録
-# ==============================
-
-if st.button("📈 データ記録"):
-
-    st.session_state.history.append({
-        "spin":spin,
-        "reg":reg,
-        "grape":grape
-    })
-
-    st.session_state.setting_history.append({
-        "spin":spin,
-        "setting":np.argmax(probs)+1
-    })
-
-
-# ==============================
-# 推移グラフ
-# ==============================
-
-st.header("📊 推移")
-
-hist = pd.DataFrame(st.session_state.history)
-
-if len(hist)>0:
-
-    hist["reg_prob"] = hist["spin"]/hist["reg"].replace(0,np.nan)
-
-    fig = px.line(hist,x="spin",y="reg_prob")
-
-    st.plotly_chart(fig,use_container_width=True)
-
-
-# ==============================
-# Google Sheets 保存
-# ==============================
-
-st.header("💾 クラウド保存")
-
-if st.button("Sheets保存"):
-
-    sheet = connect_sheet()
-
-    if sheet:
-
-        now = datetime.datetime.now()
-
-        sheet.append_row([
-            now.strftime("%Y-%m-%d %H:%M"),
-            machine,
-            spin,
-            big,
-            reg,
-            grape,
-            invest,
-            recovery
-        ])
-
-        st.success("保存完了")
-
-    else:
-
-        st.error("Sheets接続失敗")
-
-
-# ==============================
-# ホール分析
-# ==============================
-
-st.header("🏪 ホール分析")
-
-sheet = connect_sheet()
-
-if sheet:
-
-    data = sheet.get_all_records()
-
-    df = pd.DataFrame(data)
+    df=pd.DataFrame(data)
 
     st.dataframe(df)
 
-    if "REG" in df.columns:
+    if "機種" in df:
 
-        df["REG確率"] = df["回転"]/df["REG"]
+        st.subheader("機種別平均")
 
-        st.bar_chart(df.groupby("機種")["REG確率"].mean())
-
-
-# ==============================
-# リセット
-# ==============================
-
-if st.button("🔄 リセット"):
-
-    for k in keys:
-
-        if k in ["history","setting_history"]:
-            st.session_state[k]=[]
-        else:
-            st.session_state[k]=0
+        st.dataframe(
+            df.groupby("機種").mean(numeric_only=True)
+        )
