@@ -33,7 +33,7 @@ def connect_sheet():
     return sheet
 
 # ======================
-# 機種選択
+# 機種
 # ======================
 
 machine = st.selectbox(
@@ -51,7 +51,7 @@ machine = st.selectbox(
 )
 
 # ======================
-# 実戦カウンター
+# 回転
 # ======================
 
 st.header("📱実戦カウンター")
@@ -59,13 +59,13 @@ st.header("📱実戦カウンター")
 if "spin_count" not in st.session_state:
     st.session_state.spin_count = 0
 
-colA,colB = st.columns(2)
+c1,c2 = st.columns(2)
 
-with colA:
+with c1:
     if st.button("回転 +1"):
         st.session_state.spin_count += 1
 
-with colB:
+with c2:
     if st.button("回転 +10"):
         st.session_state.spin_count += 10
 
@@ -75,80 +75,53 @@ spin = st.number_input("回転数",0,value=st.session_state.spin_count)
 # 小役
 # ======================
 
-st.header("🍒小役")
+st.header("🍇小役")
 
-c1,c2,c3 = st.columns(3)
-
-with c1:
-    grape = st.number_input("🍇ぶどう",0)
-
-with c2:
-    cherry = st.number_input("🍒チェリー",0)
-
-with c3:
-    cherry_no = st.number_input("非重複チェリー",0)
-
-middle_cherry = st.number_input("中段チェリー",0)
+grape = st.number_input("ぶどう",0)
 
 # ======================
-# BIG
+# ビック
 # ======================
 
-st.header("🔴BIG内訳")
+st.header("🔴ビック内訳")
 
 b1,b2,b3 = st.columns(3)
 
 with b1:
-    big_single = st.number_input("単独BIG",0)
+    big_single = st.number_input("単独ビック",0)
 
 with b2:
-    big_cherry = st.number_input("チェリーBIG",0)
+    big_pierrot = st.number_input("ピエロビック",0)
 
 with b3:
-    big_rare = st.number_input("レアチェリーBIG",0)
-
-b4,b5 = st.columns(2)
-
-with b4:
-    big_pierrot = st.number_input("ピエロBIG",0)
-
-with b5:
-    big_one = st.number_input("一枚役BIG",0)
+    big_one = st.number_input("一枚役ビック",0)
 
 # ======================
-# REG
+# バケ
 # ======================
 
-st.header("🔵REG内訳")
+st.header("🔵バケ内訳")
 
 r1,r2,r3 = st.columns(3)
 
 with r1:
-    reg_single = st.number_input("単独REG",0)
+    reg_single = st.number_input("単独バケ",0)
 
 with r2:
-    reg_cherry = st.number_input("チェリーREG",0)
+    reg_pierrot = st.number_input("ピエロバケ",0)
 
 with r3:
-    reg_rare = st.number_input("レアチェリーREG",0)
-
-r4,r5 = st.columns(2)
-
-with r4:
-    reg_pierrot = st.number_input("ピエロREG",0)
-
-with r5:
-    reg_one = st.number_input("一枚役REG",0)
+    reg_one = st.number_input("一枚役バケ",0)
 
 # ======================
 # 合計
 # ======================
 
-big_total = big_single + big_cherry + big_rare + big_pierrot + big_one
-reg_total = reg_single + reg_cherry + reg_rare + reg_pierrot + reg_one
+big_total = big_single + big_pierrot + big_one
+reg_total = reg_single + reg_pierrot + reg_one
 
 # ======================
-# 確率計算
+# 確率
 # ======================
 
 st.header("📊確率")
@@ -161,16 +134,13 @@ if spin > 0:
         st.write("合算 1/", round(spin/total,1))
 
     if big_total > 0:
-        st.write("BIG 1/", round(spin/big_total,1))
+        st.write("ビック 1/", round(spin/big_total,1))
 
     if reg_total > 0:
-        st.write("REG 1/", round(spin/reg_total,1))
+        st.write("バケ 1/", round(spin/reg_total,1))
 
     if grape > 0:
         st.write("ぶどう 1/", round(spin/grape,1))
-
-    if cherry > 0:
-        st.write("チェリー 1/", round(spin/cherry,1))
 
 # ======================
 # 確率推移
@@ -188,7 +158,7 @@ if spin > 0:
     fig = go.Figure()
 
     fig.add_trace(go.Scatter(x=spins,y=grape_rate,mode="lines",name="ぶどう"))
-    fig.add_trace(go.Scatter(x=spins,y=reg_rate,mode="lines",name="REG"))
+    fig.add_trace(go.Scatter(x=spins,y=reg_rate,mode="lines",name="バケ"))
 
     st.plotly_chart(fig)
 
@@ -261,17 +231,10 @@ if st.button("保存"):
         machine,
         spin,
         grape,
-        cherry,
-        cherry_no,
-        middle_cherry,
         big_single,
-        big_cherry,
-        big_rare,
         big_pierrot,
         big_one,
         reg_single,
-        reg_cherry,
-        reg_rare,
         reg_pierrot,
         reg_one,
         investment,
@@ -284,14 +247,14 @@ if st.button("保存"):
 # 履歴
 # ======================
 
-st.header("📊履歴分析")
+st.header("📊履歴")
 
 if st.button("履歴読み込み"):
 
     sheet=connect_sheet()
 
-    data=sheet.get_all_records()
+    data = sheet.get_all_values()
 
-    df=pd.DataFrame(data)
+    df = pd.DataFrame(data[1:], columns=data[0])
 
     st.dataframe(df)
