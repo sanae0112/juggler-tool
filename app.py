@@ -6,7 +6,7 @@ import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-st.set_page_config(page_title="Juggler Analyzer",layout="wide")
+st.set_page_config(page_title="Juggler Analyzer", layout="wide")
 
 st.title("🎰 Juggler Analyzer")
 
@@ -33,7 +33,7 @@ def connect_sheet():
     return sheet
 
 # ======================
-# 機種
+# 機種選択
 # ======================
 
 machine = st.selectbox(
@@ -59,10 +59,15 @@ st.header("📱実戦カウンター")
 if "spin_count" not in st.session_state:
     st.session_state.spin_count = 0
 
-if st.button("回転 +1"):
-    st.session_state.spin_count += 1
+colA,colB = st.columns(2)
 
-st.write("現在回転",st.session_state.spin_count)
+with colA:
+    if st.button("回転 +1"):
+        st.session_state.spin_count += 1
+
+with colB:
+    if st.button("回転 +10"):
+        st.session_state.spin_count += 10
 
 spin = st.number_input("回転数",0,value=st.session_state.spin_count)
 
@@ -70,17 +75,17 @@ spin = st.number_input("回転数",0,value=st.session_state.spin_count)
 # 小役
 # ======================
 
-st.header("小役")
+st.header("🍒小役")
 
-col1,col2,col3 = st.columns(3)
+c1,c2,c3 = st.columns(3)
 
-with col1:
+with c1:
     grape = st.number_input("🍇ぶどう",0)
 
-with col2:
+with c2:
     cherry = st.number_input("🍒チェリー",0)
 
-with col3:
+with c3:
     cherry_no = st.number_input("非重複チェリー",0)
 
 middle_cherry = st.number_input("中段チェリー",0)
@@ -89,7 +94,7 @@ middle_cherry = st.number_input("中段チェリー",0)
 # BIG
 # ======================
 
-st.header("BIG内訳")
+st.header("🔴BIG内訳")
 
 b1,b2,b3 = st.columns(3)
 
@@ -114,7 +119,7 @@ with b5:
 # REG
 # ======================
 
-st.header("REG内訳")
+st.header("🔵REG内訳")
 
 r1,r2,r3 = st.columns(3)
 
@@ -139,67 +144,93 @@ with r5:
 # 合計
 # ======================
 
-big_total = big_single+big_cherry+big_rare+big_pierrot+big_one
-reg_total = reg_single+reg_cherry+reg_rare+reg_pierrot+reg_one
+big_total = big_single + big_cherry + big_rare + big_pierrot + big_one
+reg_total = reg_single + reg_cherry + reg_rare + reg_pierrot + reg_one
 
 # ======================
-# 確率
+# 確率計算
 # ======================
 
 st.header("📊確率")
 
-if spin>0:
+if spin > 0:
 
-    total = big_total+reg_total
+    total = big_total + reg_total
 
-    if total>0:
-        st.write("合算 1/",round(spin/total,1))
+    if total > 0:
+        st.write("合算 1/", round(spin/total,1))
 
-    if big_total>0:
-        st.write("BIG 1/",round(spin/big_total,1))
+    if big_total > 0:
+        st.write("BIG 1/", round(spin/big_total,1))
 
-    if reg_total>0:
-        st.write("REG 1/",round(spin/reg_total,1))
+    if reg_total > 0:
+        st.write("REG 1/", round(spin/reg_total,1))
 
-    if grape>0:
-        st.write("ぶどう 1/",round(spin/grape,1))
+    if grape > 0:
+        st.write("ぶどう 1/", round(spin/grape,1))
 
-    if cherry>0:
-        st.write("チェリー 1/",round(spin/cherry,1))
+    if cherry > 0:
+        st.write("チェリー 1/", round(spin/cherry,1))
 
 # ======================
-# グラフ
+# 確率推移グラフ
 # ======================
 
 st.header("📈確率推移")
 
-if spin>0:
+if spin > 0:
 
-    spins=list(range(500,spin+1,500))
+    spins = list(range(500,spin+1,500))
 
-    grape_rate=[spin/grape if grape>0 else 0 for _ in spins]
-    reg_rate=[spin/reg_total if reg_total>0 else 0 for _ in spins]
+    grape_rate = [spin/grape if grape>0 else 0 for _ in spins]
+    reg_rate = [spin/reg_total if reg_total>0 else 0 for _ in spins]
 
-    fig=go.Figure()
+    fig = go.Figure()
 
-    fig.add_trace(go.Scatter(
-        x=spins,
-        y=grape_rate,
-        mode="lines",
-        name="ぶどう"
-    ))
+    fig.add_trace(go.Scatter(x=spins,y=grape_rate,mode="lines",name="ぶどう"))
 
-    fig.add_trace(go.Scatter(
-        x=spins,
-        y=reg_rate,
-        mode="lines",
-        name="REG"
-    ))
+    fig.add_trace(go.Scatter(x=spins,y=reg_rate,mode="lines",name="REG"))
 
     st.plotly_chart(fig)
 
 # ======================
-# ベイズAI
+# ぶどう設定ライン
+# ======================
+
+st.header("🍇設定別ぶどうライン")
+
+GRAPE_SETTING = {
+1:6.35,
+2:6.30,
+3:6.25,
+4:6.20,
+5:6.15,
+6:6.05
+}
+
+if spin>0 and grape>0:
+
+    spins=list(range(500,spin+1,500))
+
+    fig=go.Figure()
+
+    actual=[spin/grape for _ in spins]
+
+    fig.add_trace(go.Scatter(x=spins,y=actual,mode="lines",name="実測"))
+
+    for s,v in GRAPE_SETTING.items():
+
+        fig.add_trace(go.Scatter(
+            x=spins,
+            y=[v for _ in spins],
+            mode="lines",
+            name=f"設定{s}"
+        ))
+
+    st.plotly_chart(fig)
+
+# ======================
+# ベイズAI設定推測
 # ======================
 
 st.header("🤖設定推測AI")
@@ -241,10 +272,7 @@ if spin>0:
 
     if result:
 
-        df=pd.DataFrame(
-            list(result.items()),
-            columns=["設定","確率%"]
-        )
+        df=pd.DataFrame(list(result.items()),columns=["設定","確率%"])
 
         st.bar_chart(df.set_index("設定"))
 
@@ -256,12 +284,12 @@ if spin>0:
 # 保存
 # ======================
 
-st.header("💾保存")
+st.header("💾データ保存")
 
 investment=st.number_input("投資",0)
 recovery=st.number_input("回収",0)
 
-if st.button("データ保存"):
+if st.button("保存"):
 
     sheet=connect_sheet()
 
@@ -289,13 +317,13 @@ if st.button("データ保存"):
         recovery
     ])
 
-    st.success("保存完了")
+    st.success("保存しました")
 
 # ======================
 # 履歴分析
 # ======================
 
-st.header("📊履歴分析")
+st.header("🏠ホール分析")
 
 if st.button("履歴読み込み"):
 
@@ -307,10 +335,18 @@ if st.button("履歴読み込み"):
 
     st.dataframe(df)
 
-    if "機種" in df:
+    if len(df)>0:
 
-        st.subheader("機種別平均")
-
-        st.dataframe(
-            df.groupby("機種").mean(numeric_only=True)
+        df["REG確率"]=df["回転"]/(
+        df["単独REG"]+
+        df["チェリーREG"]+
+        df["レアチェリーREG"]+
+        df["ピエロREG"]+
+        df["一枚役REG"]
         )
+
+        high=df[df["REG確率"]<280]
+
+        rate=len(high)/len(df)*100
+
+        st.write("高設定割合",round(rate,1),"%")
