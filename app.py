@@ -463,3 +463,81 @@ for i, row in enumerate(st.session_state.multi_rows):
     BIG確率: <span style='color:{col(big_p)}'>{round(big_p,1) if big_p else '-'}</span>
     REG確率: <span style='color:{col(reg_p)}'>{round(reg_p,1) if reg_p else '-'}</span>
     """, unsafe_allow_html=True)
+# ======================
+# 追加：複数台データ保存
+# ======================
+st.header("💾複数台データ保存")
+
+c1, c2 = st.columns(2)
+
+# 自分
+with c1:
+    st.markdown('<div class="green-btn">', unsafe_allow_html=True)
+    if st.button("🟢 複数台を自分データとして保存"):
+
+        sheet = connect_sheet_mode(machine, "自分")
+        now = datetime.datetime.now()
+
+        count = 0
+
+        for row in st.session_state.multi_rows:
+
+            if row["台番号"] == "":
+                continue
+
+            sheet.append_row([
+                now.strftime("%Y-%m-%d %H:%M"),
+                machine,
+                shop,
+                row["台番号"],
+                row["回転"],
+                0,  # 前任者回転（不明なので0）
+                0,  # ぶどう
+                0,  # チェリー
+                row["BIG"],
+                row["REG"],
+                0,  # 投資
+                row["差枚"]  # 回収代わり
+            ])
+
+            count += 1
+
+        st.success(f"🟢 {count}台 保存完了")
+
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# 他人
+with c2:
+    st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
+    if st.button("🔵 複数台を他人データとして保存"):
+
+        sheet = connect_sheet_mode(machine, "他人")
+        now = datetime.datetime.now()
+
+        count = 0
+
+        for row in st.session_state.multi_rows:
+
+            if row["台番号"] == "":
+                continue
+
+            sheet.append_row([
+                now.strftime("%Y-%m-%d %H:%M"),
+                machine,
+                shop,
+                row["台番号"],
+                row["回転"],
+                0,
+                0,
+                0,
+                row["BIG"],
+                row["REG"],
+                0,
+                row["差枚"]
+            ])
+
+            count += 1
+
+        st.success(f"🔵 {count}台 保存完了")
+
+    st.markdown('</div>', unsafe_allow_html=True)
