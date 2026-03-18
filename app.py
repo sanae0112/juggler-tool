@@ -347,3 +347,119 @@ if st.button("AI分析"):
         if len(top)>0:
             best = top.iloc[0]
             st.success(f"🔥最有力：{best['ホール']} 台{best['台番号']}")
+            # ======================
+# 追加：シート分岐（削除なし）
+# ======================
+def connect_sheet_mode(machine_name, mode):
+    scope = [
+        "https://spreadsheets.google.com/feeds",
+        "https://www.googleapis.com/auth/drive"
+    ]
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        st.secrets["gcp_service_account"], scope
+    )
+    client = gspread.authorize(creds)
+    spreadsheet = client.open("juggler_data")
+
+    sheet_name = f"{machine_name}_{mode}"
+
+    try:
+        sheet = spreadsheet.worksheet(sheet_name)
+    except:
+        sheet = spreadsheet.add_worksheet(title=sheet_name, rows="2000", cols="20")
+        sheet.append_row([
+            "日時","機種","ホール","台番号",
+            "現在回転","前任者回転",
+            "ぶどう","チェリー",
+            "BIG","REG",
+            "投資","回収"
+        ])
+    return sheet
+
+# ======================
+# 追加：色ボタンCSS
+# ======================
+st.markdown("""
+<style>
+.green-btn button {background-color:#28a745!important;color:white!important;}
+.blue-btn button {background-color:#007bff!important;color:white!important;}
+</style>
+""", unsafe_allow_html=True)
+
+# ======================
+# 追加：保存ボタン分離
+# ======================
+st.header("💾追加保存（色分け）")
+
+c1, c2 = st.columns(2)
+
+# 自分
+with c1:
+    st.markdown('<div class="green-btn">', unsafe_allow_html=True)
+    if st.button("🟢 自分データ保存（追加）"):
+        sheet = connect_sheet_mode(machine, "自分")
+        now = datetime.datetime.now()
+
+        sheet.append_row([
+            now.strftime("%Y-%m-%d %H:%M"),
+            machine,shop,machine_no,
+            spin,prev_spin,
+            grape,cherry,
+            big_total,reg_total,
+            investment,recovery
+        ])
+        st.success("🟢自分保存完了")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# 他人
+with c2:
+    st.markdown('<div class="blue-btn">', unsafe_allow_html=True)
+    if st.button("🔵 他人データ保存（追加）"):
+        sheet = connect_sheet_mode(machine, "他人")
+        now = datetime.datetime.now()
+
+        sheet.append_row([
+            now.strftime("%Y-%m-%d %H:%M"),
+            machine,shop,machine_no,
+            spin,prev_spin,
+            grape,cherry,
+            big_total,reg_total,
+            investment,recovery
+        ])
+        st.success("🔵他人保存完了")
+    st.markdown('</div>', unsafe_allow_html=True)
+
+# ======================
+# 追加：複数台UI（CSVとは別）
+# ======================
+st.header("📥追加：複数台入力（UI版）")
+
+if "multi_rows" not in st.session_state:
+    st.session_state.multi_rows = []
+
+if st.button("➕ 台を追加"):
+    st.session_state.multi_rows.append({"台番号":"","回転":0,"BIG":0,"REG":0,"差枚":0})
+
+for i, row in enumerate(st.session_state.multi_rows):
+
+    c1,c2,c3,c4,c5 = st.columns(5)
+
+    row["台番号"] = c1.text_input("台番号", key=f"mno{i}")
+    row["回転"] = c2.number_input("回転", key=f"msp{i}")
+    row["BIG"] = c3.number_input("BIG", key=f"mb{i}")
+    row["REG"] = c4.number_input("REG", key=f"mr{i}")
+    row["差枚"] = c5.number_input("差枚", key=f"md{i}")
+
+    big_p = row["回転"]/row["BIG"] if row["BIG"]>0 else 0
+    reg_p = row["回転"]/row["REG"] if row["REG"]>0 else 0
+
+    def col(v):
+        if v == 0: return "gray"
+        elif v < 280: return "red"
+        elif v < 320: return "orange"
+        else: return "blue"
+
+    st.markdown(f"""
+    BIG確率: <span style='color:{col(big_p)}'>{round(big_p,1) if big_p else '-'}</span>
+    REG確率: <span style='color:{col(reg_p)}'>{round(reg_p,1) if reg_p else '-'}</span>
+    """, unsafe_allow_html=True)
