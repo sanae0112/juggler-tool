@@ -248,7 +248,7 @@ with c2:
             ])
             count += 1
         st.success(f"{count}台 保存完了")
-# ======================
+        # ======================
 # 🧠 設定推測AI（横棒グラフ＋％表示）
 # ======================
 st.header("🧠 設定推測AI（確率表示）")
@@ -265,18 +265,22 @@ if total_spin > 0:
         s = data[setting]
         score = 0
 
+        # ===== REG =====
         if "reg" in s and reg_total > 0:
             reg_rate = total_spin / reg_total
             score += weights.get("reg",0) * abs(reg_rate - s["reg"])
 
+        # ===== ぶどう =====
         if "grape" in s and grape > 0:
             grape_rate = total_spin / grape
             score += weights.get("grape",0) * abs(grape_rate - s["grape"])
 
+        # ===== チェリーREG =====
         if "cherry_reg" in s and reg_total > 0:
             cherry_reg_rate = reg_cherry / reg_total
             score += weights.get("cherry_reg",0) * abs(cherry_reg_rate - s["cherry_reg"])
 
+        # ===== ミスター系 =====
         if "pierrot" in s and pierrot > 0:
             score += weights.get("pierrot",0) * abs((total_spin / pierrot) - s["pierrot"])
 
@@ -295,7 +299,7 @@ if total_spin > 0:
         scores[setting] = score
 
     # ======================
-    # ★ スコア → 確率変換
+    # スコア → 確率変換
     # ======================
     max_score = max(scores.values())
     min_score = min(scores.values())
@@ -303,20 +307,17 @@ if total_spin > 0:
     probs = {}
 
     for k,v in scores.items():
-        # 逆転（小さいほど良い → 大きいほど良い）
         if max_score - min_score == 0:
             probs[k] = 100/6
         else:
-            inv = max_score - v
-            probs[k] = inv
+            probs[k] = (max_score - v)
 
-    # 正規化（％）
     total = sum(probs.values())
     for k in probs:
         probs[k] = round((probs[k] / total) * 100, 1)
 
     # ======================
-    # 推定
+    # 推定表示
     # ======================
     best = max(probs, key=probs.get)
     st.subheader(f"🎯 推定設定：設定{best}（{probs[best]}%）")
@@ -350,11 +351,6 @@ if total_spin > 0:
     # ======================
     with st.expander("詳細（確率）"):
         st.write(probs)
-
-else:
-    st.info("回転数を入力するとAI推測が動きます")
-    with st.expander("詳細スコア"):
-        st.write(scores)
 
 else:
     st.info("回転数を入力するとAI推測が動きます")
