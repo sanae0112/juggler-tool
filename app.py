@@ -401,19 +401,20 @@ def evaluate_row(spin, big, reg):
 def save_with_eval(row, mode):
     now = datetime.datetime.now()
 
+    weekday = now.strftime("%A")  # 曜日
+
     eval_result = evaluate_row(row["回転"], row["BIG"], row["REG"])
 
     sheet = connect_sheet_mode(row["機種"], mode)
 
     sheet.append_row([
         now.strftime("%Y-%m-%d %H:%M"),
+        weekday,
         row["機種"],
         shop,
         row["台番号"],
         row["回転"],
-        0,
-        0,
-        0,
+        0,0,0,
         row["BIG"],
         row["REG"],
         0,
@@ -457,3 +458,72 @@ if st.button("おすすめ台を分析"):
             st.success(f"🔥おすすめ台：{best_machine}")
 
             st.write(scores)
+# ======================
+# 🧠 総合おすすめAI（曜日×ホール×台）
+# ======================
+st.header("🧠 総合おすすめAI（曜日×ホール×台）")
+
+if st.button("最強おすすめ分析"):
+
+    sheet = connect_sheet_mode(machine, "自分")
+    data = sheet.get_all_records()
+
+    df = pd.DataFrame(data)
+
+    if len(df) == 0:
+        st.warning("データがありません")
+    else:
+
+        # ===== 評価数値化 =====
+        def score_map(x):
+            if x == "高": return 2
+            if x == "中": return 1
+            if x == "低": return -1
+            return 0
+
+        df["score"] = df["評価"].map(score_map)
+
+        # ===== 台別 =====
+        machine_score = df.groupby("台番号")["score"].mean()
+
+        # ===== 曜日別 =====
+        weekday_score = df.groupby("曜日")["score"].mean()
+
+        # ===== ホール別 =====
+        hall_score = df.groupby("ホール")["score"].mean()
+
+        # ===== 総合スコア =====
+        total_scores = {}
+
+        for _, row in df.iterrows():
+            m = row["台番号"]
+            w = row["曜日"]
+            h = row["ホール"]
+
+            score = (
+                machine_score.get(m,0)*0.5 +
+                weekday_score.get(w,0)*0.3 +
+                hall_score.get(h,0)*0.2
+            )
+
+            total_scores[m] = score
+
+        # ===== 最強台 =====
+        if total_scores:
+            best = max(total_scores, key=total_scores.get)
+
+            st.success(f"🔥最強おすすめ台：{best}")
+
+            # 可視化
+            df_score = pd.DataFrame({
+                "台番号": list(total_scores.keys()),
+                "スコア": list(total_scores.values())
+            }).sort_values("スコア")
+
+            fig = go.Figure(go.Bar(
+                x=df_score["スコア"],
+                y=df_score["台番号"],
+                orientation='h'
+            ))
+
+            st.plotly_chart(fig, use_container_width=True)
