@@ -75,10 +75,27 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ======================
-# がりぞう実戦値
+# 表示・色ロジック（改良追加）
+# ======================
+def fmt(v):
+    return f"{v:,.1f}" if v else "-"
+
+def col(v):
+    if v is None:
+        return "gray"
+    elif v < 270:
+        return "red"
+    elif v < 300:
+        return "orange"
+    elif v < 350:
+        return "blue"
+    else:
+        return "gray"
+
+# ======================
+# がりぞう実戦値（全機種）
 # ======================
 garizo_specs = {
-
 "マイジャグラーV":{"weights":{"reg":0.4,"grape":0.3,"cherry_reg":0.3},
 "data":{1:{"reg":430,"grape":6.05,"cherry_reg":0.08},2:{"reg":390,"grape":6.00,"cherry_reg":0.09},
 3:{"reg":330,"grape":5.95,"cherry_reg":0.10},4:{"reg":305,"grape":5.85,"cherry_reg":0.11},
@@ -124,8 +141,8 @@ garizo_specs = {
 4:{"grape":5.9,"pierrot":7.0,"bell":9.8,"cherry_big":0.08,"pierrot_big":0.07,"pierrot_reg":0.06},
 5:{"grape":5.85,"pierrot":6.9,"bell":9.5,"cherry_big":0.09,"pierrot_big":0.08,"pierrot_reg":0.07},
 6:{"grape":5.8,"pierrot":6.8,"bell":9.2,"cherry_big":0.10,"pierrot_big":0.09,"pierrot_reg":0.08}}}
-
 }
+
 # ======================
 # 入力
 # ======================
@@ -138,35 +155,10 @@ prev_spin = st.number_input("前任者回転", 0)
 total_spin = spin + prev_spin
 st.write("総回転:", total_spin)
 
-# チェリー
-st.header("🍒チェリー")
-cherry_free = st.number_input("フリー打ち", 0)
-cherry_aim = st.number_input("狙い打ち", 0)
-cherry = cherry_aim if cherry_aim > 0 else cherry_free
-
-# ボーナス
-st.header("🎰ボーナス")
-big_single = st.number_input("単独BIG", 0)
-big_cherry = st.number_input("チェリーBIG", 0)
-big_rare = st.number_input("レアチェリーBIG", 0)
-big_pierrot = st.number_input("ピエロBIG", 0)
-reg_single = st.number_input("単独REG", 0)
-reg_cherry = st.number_input("チェリーREG", 0)
-reg_pierrot = st.number_input("ピエロREG", 0)
-
-big_total = big_single + big_cherry + big_rare + big_pierrot
-reg_total = reg_single + reg_cherry + reg_pierrot
-
-# 小役
-st.header("🍇小役")
-grape = st.number_input("ぶどう", 0)
-pierrot = st.number_input("ピエロ", 0)
-bell = st.number_input("ベル", 0)
-
 # ======================
-# 複数台UI（機種選択付き）
+# 複数台UI
 # ======================
-st.header("📥追加：複数台入力（UI＋機種選択）")
+st.header("📥追加：複数台入力")
 
 if "multi_rows" not in st.session_state:
     st.session_state.multi_rows = []
@@ -185,15 +177,8 @@ for i, row in enumerate(st.session_state.multi_rows):
     row["REG"] = c4.number_input("REG", key=f"mr{i}")
     row["差枚"] = c5.number_input("差枚", key=f"md{i}")
 
-    big_p = row["回転"]/row["BIG"] if row["BIG"]>0 else 0
-    reg_p = row["回転"]/row["REG"] if row["REG"]>0 else 0
-
-    def fmt(v): return f"{v:,.1f}" if v else "-"
-    def col(v):
-        if v == 0: return "gray"
-        elif v < 280: return "red"
-        elif v < 320: return "orange"
-        else: return "blue"
+    big_p = row["回転"]/row["BIG"] if row["BIG"] > 0 else None
+    reg_p = row["回転"]/row["REG"] if row["REG"] > 0 else None
 
     st.markdown(f"""
     BIG確率: <span style='color:{col(big_p)}'>{fmt(big_p)}</span>
@@ -201,7 +186,7 @@ for i, row in enumerate(st.session_state.multi_rows):
     """, unsafe_allow_html=True)
 
 # ======================
-# 複数台保存（機種別）
+# 保存
 # ======================
 st.header("💾複数台データ保存")
 
@@ -212,7 +197,7 @@ with c1:
         now = datetime.datetime.now()
         count = 0
         for row in st.session_state.multi_rows:
-            if row.get("台番号","") == "":
+            if row.get("台番号","") == "" or not row.get("機種"):
                 continue
             sheet = connect_sheet_mode(row["機種"], "自分")
             sheet.append_row([
@@ -230,7 +215,7 @@ with c2:
         now = datetime.datetime.now()
         count = 0
         for row in st.session_state.multi_rows:
-            if row.get("台番号","") == "":
+            if row.get("台番号","") == "" or not row.get("機種"):
                 continue
             sheet = connect_sheet_mode(row["機種"], "他人")
             sheet.append_row([
