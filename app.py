@@ -354,3 +354,106 @@ if total_spin > 0:
 
 else:
     st.info("回転数を入力するとAI推測が動きます")
+    # ======================
+# 🎯 打つ / ヤメ判定AI
+# ======================
+st.header("🎯 打つ・ヤメ判定")
+
+decision = "様子見"
+
+if total_spin > 0 and reg_total > 0:
+
+    reg_rate = total_spin / reg_total
+    total_bonus = big_total + reg_total
+    combined = total_spin / total_bonus if total_bonus > 0 else 999
+
+    best_prob = probs[best] if 'probs' in locals() else 0
+
+    if best_prob > 60 and reg_rate < 300:
+        decision = "🟢 継続推奨（高設定期待）"
+    elif best_prob > 40:
+        decision = "🟡 様子見"
+    else:
+        decision = "🔴 ヤメ推奨"
+
+    st.subheader(decision)
+
+# ======================
+# 💾 保存時に評価付与
+# ======================
+def evaluate_row(spin, big, reg):
+    if spin == 0 or (big+reg) == 0:
+        return "不明"
+
+    reg_rate = spin / reg if reg > 0 else 999
+    combined = spin / (big + reg)
+
+    if reg_rate < 280 and combined < 120:
+        return "高"
+    elif reg_rate < 330:
+        return "中"
+    else:
+        return "低"
+
+# ======================
+# 💾 保存処理（評価付き）
+# ======================
+def save_with_eval(row, mode):
+    now = datetime.datetime.now()
+
+    eval_result = evaluate_row(row["回転"], row["BIG"], row["REG"])
+
+    sheet = connect_sheet_mode(row["機種"], mode)
+
+    sheet.append_row([
+        now.strftime("%Y-%m-%d %H:%M"),
+        row["機種"],
+        shop,
+        row["台番号"],
+        row["回転"],
+        0,
+        0,
+        0,
+        row["BIG"],
+        row["REG"],
+        0,
+        row["差枚"],
+        eval_result
+    ])
+
+# ======================
+# 🧠 おすすめ台AI
+# ======================
+st.header("🧠 おすすめ台AI")
+
+if st.button("おすすめ台を分析"):
+    sheet = connect_sheet_mode(machine, "自分")
+    data = sheet.get_all_records()
+
+    df = pd.DataFrame(data)
+
+    if len(df) > 0:
+        result = df.groupby("台番号")["投資"].count()
+
+        # 評価集計
+        eval_counts = df.groupby(["台番号","回収"]).size().unstack(fill_value=0)
+
+        scores = {}
+
+        for idx in eval_counts.index:
+            high = eval_counts.loc[idx].get("高",0)
+            mid = eval_counts.loc[idx].get("中",0)
+            low = eval_counts.loc[idx].get("低",0)
+
+            total = high + mid + low
+            if total == 0:
+                continue
+
+            score = (high*2 + mid*1 - low*1) / total
+            scores[idx] = score
+
+        if scores:
+            best_machine = max(scores, key=scores.get)
+            st.success(f"🔥おすすめ台：{best_machine}")
+
+            st.write(scores)
