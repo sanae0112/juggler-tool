@@ -1,13 +1,12 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import plotly.graph_objects as go
 import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
-st.set_page_config(page_title="Juggler Analyzer", layout="wide")
-st.title("🎰 Juggler Analyzer")
+st.set_page_config(page_title="Juggler Analyzer PRO", layout="wide")
+st.title("🎰 Juggler Analyzer PRO")
 
 # ======================
 # Google Sheets接続
@@ -23,8 +22,8 @@ def connect_sheet():
     )
 
     client = gspread.authorize(creds)
-    sheet = client.open("juggler_data").sheet1
-    return sheet
+    return client.open("juggler_data").sheet1
+
 
 # ======================
 # 機種
@@ -43,8 +42,6 @@ machine = st.selectbox("機種", [
 # ======================
 # ホール
 # ======================
-st.header("🏠ホール")
-
 shop = st.text_input("ホール名")
 machine_no = st.text_input("台番号")
 
@@ -55,135 +52,177 @@ if shop == "":
 # ======================
 # 回転数
 # ======================
-st.header("🎯回転数")
-
 spin = st.number_input("現在回転", 0)
 prev_spin = st.number_input("前任者回転", 0)
-
 total_spin = spin + prev_spin
+
 st.write("総回転:", total_spin)
 
 # ======================
 # 前任者データ
 # ======================
-st.header("👤前任者データ")
-
-prev_big = st.number_input("前任者ビック", 0)
-prev_reg = st.number_input("前任者バケ", 0)
+prev_big = st.number_input("前任者BIG", 0)
+prev_reg = st.number_input("前任者REG", 0)
 prev_diff = st.number_input("前任者差枚", 0)
 
 # ======================
-# 前任者ぶどう逆算（最強版）
+# チェリー入力方式
 # ======================
-st.subheader("🍇前任者ぶどう逆算（差枚＋理論）")
+st.header("🍒チェリー")
+
+cherry_mode = st.radio("取得方法", ["狙い打ち", "フリー打ち"])
+cherry = st.number_input("チェリー", 0)
+
+miss_rate = 0.25
+if cherry_mode == "フリー打ち":
+    miss_rate = st.slider("取りこぼし率", 0.0, 0.5, 0.25)
+
+if cherry_mode == "狙い打ち":
+    cherry_corrected = cherry
+else:
+    cherry_corrected = cherry / (1 - miss_rate)
+
+st.write("補正後チェリー:", int(cherry_corrected))
+
+# ======================
+# 小役
+# ======================
+grape = st.number_input("ぶどう", 0)
+
+# ======================
+# ボーナス
+# ======================
+big = st.number_input("BIG", 0)
+reg = st.number_input("REG", 0)
+
+# ======================
+# ぶどう逆算（進化版）
+# ======================
+st.header("🍇ぶどう逆算（進化版）")
 
 if prev_spin > 0:
 
     BIG_PAY = 240
     REG_PAY = 96
     GRAPE_PAY = 8
+    CHERRY_PAY = 2
 
-    # ボーナス払い出し
+    grape_rate_table = {
+        "アイムジャグラーEX": 6.0,
+        "マイジャグラーV": 5.9,
+        "ファンキージャグラー2": 5.8,
+        "ゴーゴージャグラー3": 5.9,
+        "ハッピージャグラーV3": 5.8,
+        "ミスタージャグラー": 5.7,
+        "ジャグラーガールズSS": 5.9,
+        "ウルトラミラクルジャグラー": 5.8
+    }
+
     bonus_out = (prev_big * BIG_PAY) + (prev_reg * REG_PAY)
+    cherry_out = cherry_corrected * CHERRY_PAY
 
-    # 残り差枚
-    remain = prev_diff - bonus_out
+    remain = prev_diff - bonus_out - cherry_out
 
-    # 差枚ベースぶどう
-    grape_from_diff = remain / GRAPE_PAY if GRAPE_PAY > 0 else 0
+    grape_from_diff = remain / GRAPE_PAY
+    theoretical = prev_spin / grape_rate_table[machine]
 
-    # 理論ぶどう
-    theoretical_grape = prev_spin / 6.2
-
-    # ハイブリッド
-    grape_est = (grape_from_diff + theoretical_grape) / 2
+    grape_est = (grape_from_diff * 0.7) + (theoretical * 0.3)
 
     if grape_est < 0:
         grape_est = 0
 
-    if grape_est > 0:
-        st.write("推定ぶどう回数:", int(grape_est))
-        st.write("推定ぶどう確率 1/", round(prev_spin / grape_est, 2))
+    st.write("推定ぶどう:", int(grape_est))
+    st.write("推定確率 1/", round(prev_spin / grape_est, 2))
+
 
 # ======================
-# 小役
+# 設定推測
 # ======================
-st.header("🍒小役")
+st.header("🎯設定推測")
 
-grape = st.number_input("🍇ぶどう", 0)
-cherry = st.number_input("🍒チェリー", 0)
-middle_cherry = st.number_input("中段チェリー", 0)
+setting_data = {
+    1: {"reg": 439, "grape": 6.1},
+    2: {"reg": 399, "grape": 6.0},
+    3: {"reg": 331, "grape": 5.9},
+    4: {"reg": 315, "grape": 5.85},
+    5: {"reg": 290, "grape": 5.8},
+    6: {"reg": 268, "grape": 5.7},
+}
 
-# ======================
-# ビック
-# ======================
-st.header("🔴ビック")
+def calc_score(a, b):
+    return 1 / (abs(a - b) + 0.01)
 
-big_single = st.number_input("単独ビック", 0)
-big_cherry = st.number_input("チェリービック", 0)
-big_pierrot = st.number_input("ピエロビック", 0)
-big_one = st.number_input("一枚役ビック", 0)
+scores = {}
 
-# ======================
-# バケ
-# ======================
-st.header("🔵バケ")
+if total_spin > 0 and reg > 0:
 
-reg_single = st.number_input("単独バケ", 0)
-reg_cherry = st.number_input("チェリーバケ", 0)
-reg_pierrot = st.number_input("ピエロバケ", 0)
-reg_one = st.number_input("一枚役バケ", 0)
+    for s, data in setting_data.items():
+        score = 0
 
-# ======================
-# 合計
-# ======================
-big_total = big_single + big_cherry + big_pierrot + big_one
-reg_total = reg_single + reg_cherry + reg_pierrot + reg_one
-total_bonus = big_total + reg_total
+        actual_reg = total_spin / reg
+        score += calc_score(actual_reg, data["reg"]) * 0.5
 
-# ======================
-# 確率
-# ======================
-st.header("📊確率")
+        if grape > 0:
+            actual_grape = total_spin / grape
+            score += calc_score(actual_grape, data["grape"]) * 0.3
 
-if total_spin > 0:
+        scores[s] = score
 
-    if total_bonus > 0:
-        st.write("合算 1/", round(total_spin / total_bonus, 1))
+    sorted_scores = sorted(scores.items(), key=lambda x: x[1], reverse=True)
 
-    if big_total > 0:
-        st.write("ビック 1/", round(total_spin / big_total, 1))
-
-    if reg_total > 0:
-        st.write("バケ 1/", round(total_spin / reg_total, 1))
-
-    if grape > 0:
-        st.write("ぶどう 1/", round(total_spin / grape, 1))
-
-    if cherry > 0:
-        st.write("チェリー 1/", round(total_spin / cherry, 1))
+    for s, sc in sorted_scores:
+        st.write(f"設定{s}: {round(sc,3)}")
 
 # ======================
-# チェリー重複率
+# 設定推移グラフ
 # ======================
-st.header("🍒チェリー重複率")
+st.header("📈設定推移グラフ")
 
-cherry_bonus = big_cherry + reg_cherry
+if total_spin > 1000 and reg > 0:
 
-if cherry > 0:
-    rate = cherry_bonus / cherry * 100
-    st.write("重複率:", round(rate, 2), "%")
+    chunk_size = 500
+    x_axis = []
+    history = {i: [] for i in range(1,7)}
 
-# ======================
-# 収支
-# ======================
-st.header("💰収支")
+    for i in range(chunk_size, total_spin, chunk_size):
 
-investment = st.number_input("投資", 0)
-recovery = st.number_input("回収", 0)
+        ratio = i / total_spin
+        r = max(1, int(reg * ratio))
+        g = max(1, int(grape * ratio))
 
-profit = recovery - investment
-st.write("差枚:", profit)
+        x_axis.append(i)
+
+        for s, data in setting_data.items():
+
+            score = 0
+
+            actual_reg = i / r
+            score += calc_score(actual_reg, data["reg"]) * 0.5
+
+            actual_grape = i / g
+            score += calc_score(actual_grape, data["grape"]) * 0.3
+
+            history[s].append(score)
+
+    fig = go.Figure()
+
+    for s in history:
+        fig.add_trace(go.Scatter(
+            x=x_axis,
+            y=history[s],
+            mode='lines',
+            name=f"設定{s}",
+            line=dict(width=4 if s == 6 else 1)
+        ))
+
+    fig.update_layout(
+        title="設定推移",
+        xaxis_title="回転数",
+        yaxis_title="スコア"
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
 
 # ======================
 # 保存
@@ -202,45 +241,8 @@ if st.button("保存"):
         prev_spin,
         grape,
         cherry,
-        middle_cherry,
-        big_single,
-        big_cherry,
-        big_pierrot,
-        big_one,
-        reg_single,
-        reg_cherry,
-        reg_pierrot,
-        reg_one,
-        investment,
-        recovery
+        big,
+        reg
     ])
 
-    st.success("保存しました")
-
-# ======================
-# 履歴分析
-# ======================
-st.header("📈履歴分析")
-
-if st.button("履歴読み込み"):
-
-    sheet = connect_sheet()
-    data = sheet.get_all_records()
-    df = pd.DataFrame(data)
-
-    if len(df) > 0:
-
-        df["差枚"] = df["回収"] - df["投資"]
-
-        st.dataframe(df)
-
-        st.write("総収支:", df["差枚"].sum())
-        st.write("勝率:", round(len(df[df["差枚"] > 0]) / len(df) * 100, 1), "%")
-
-        df["日付"] = df["日時"].str[:10]
-        st.bar_chart(df.groupby("日付")["差枚"].sum())
-
-        df["月"] = df["日時"].str[:7]
-        st.bar_chart(df.groupby("月")["差枚"].sum())
-
-        st.bar_chart(df.groupby("ホール")["差枚"].sum())
+    st.success("保存完了")
