@@ -114,7 +114,7 @@ garizo_specs = {
 
 "ジャグラーガールズSS":{"weights":{"reg":0.45,"grape":0.35,"cherry_reg":0.2},
 "data":{1:{"reg":430,"grape":6.10,"cherry_reg":0.08},2:{"reg":390,"grape":6.05,"cherry_reg":0.09},
-3:{"reg":330,"grape":5.95,"cherry_reg":0.10},4:{"grape":5.90,"cherry_reg":0.11,"reg":305},
+3:{"reg":330,"grape":5.95,"cherry_reg":0.10},4:{"reg":305,"grape":5.90,"cherry_reg":0.11},
 5:{"reg":285,"grape":5.85,"cherry_reg":0.12},6:{"reg":265,"grape":5.80,"cherry_reg":0.13}}},
 
 "ウルトラミラクルジャグラー":{"weights":{"grape":0.2,"pierrot":0.2,"bell":0.2,"cherry_big":0.15,"pierrot_big":0.15,"pierrot_reg":0.1},
