@@ -78,7 +78,6 @@ st.markdown("""
 # がりぞう実戦値
 # ======================
 garizo_specs = {
-
 "マイジャグラーV":{"weights":{"reg":0.4,"grape":0.3,"cherry_reg":0.3},
 "data":{1:{"reg":430,"grape":6.05,"cherry_reg":0.08},2:{"reg":390,"grape":6.00,"cherry_reg":0.09},
 3:{"reg":330,"grape":5.95,"cherry_reg":0.10},4:{"reg":305,"grape":5.85,"cherry_reg":0.11},
@@ -124,8 +123,8 @@ garizo_specs = {
 4:{"grape":5.9,"pierrot":7.0,"bell":9.8,"cherry_big":0.08,"pierrot_big":0.07,"pierrot_reg":0.06},
 5:{"grape":5.85,"pierrot":6.9,"bell":9.5,"cherry_big":0.09,"pierrot_big":0.08,"pierrot_reg":0.07},
 6:{"grape":5.8,"pierrot":6.8,"bell":9.2,"cherry_big":0.10,"pierrot_big":0.09,"pierrot_reg":0.08}}}
-
 }
+
 # ======================
 # 入力
 # ======================
@@ -185,15 +184,22 @@ for i, row in enumerate(st.session_state.multi_rows):
     row["REG"] = c4.number_input("REG", key=f"mr{i}")
     row["差枚"] = c5.number_input("差枚", key=f"md{i}")
 
-    big_p = row["回転"]/row["BIG"] if row["BIG"]>0 else 0
-    reg_p = row["回転"]/row["REG"] if row["REG"]>0 else 0
+    # ★修正ポイント
+    big_p = row["回転"]/row["BIG"] if row["BIG"] > 0 else None
+    reg_p = row["回転"]/row["REG"] if row["REG"] > 0 else None
 
     def fmt(v): return f"{v:,.1f}" if v else "-"
     def col(v):
-        if v == 0: return "gray"
-        elif v < 280: return "red"
-        elif v < 320: return "orange"
-        else: return "blue"
+        if v is None:
+            return "gray"
+        elif v < 270:
+            return "red"
+        elif v < 300:
+            return "orange"
+        elif v < 350:
+            return "blue"
+        else:
+            return "gray"
 
     st.markdown(f"""
     BIG確率: <span style='color:{col(big_p)}'>{fmt(big_p)}</span>
@@ -212,7 +218,7 @@ with c1:
         now = datetime.datetime.now()
         count = 0
         for row in st.session_state.multi_rows:
-            if row.get("台番号","") == "":
+            if row.get("台番号","") == "" or not row.get("機種"):
                 continue
             sheet = connect_sheet_mode(row["機種"], "自分")
             sheet.append_row([
@@ -230,7 +236,7 @@ with c2:
         now = datetime.datetime.now()
         count = 0
         for row in st.session_state.multi_rows:
-            if row.get("台番号","") == "":
+            if row.get("台番号","") == "" or not row.get("機種"):
                 continue
             sheet = connect_sheet_mode(row["機種"], "他人")
             sheet.append_row([
