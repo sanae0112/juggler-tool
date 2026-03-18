@@ -6,12 +6,12 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 
 st.set_page_config(page_title="Juggler Analyzer AI PRO", layout="wide")
-st.title("🎰 Juggler Analyzer AI PRO【Ver3 FINAL】")
+st.title("🎰 Juggler Analyzer AI PRO【Ver3 FINAL＋拡張】")
 
 # ======================
-# Google Sheets接続
+# Google Sheets接続（機種ごと）
 # ======================
-def connect_sheet():
+def connect_sheet(machine_name):
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
@@ -20,7 +20,22 @@ def connect_sheet():
         st.secrets["gcp_service_account"], scope
     )
     client = gspread.authorize(creds)
-    return client.open("juggler_data").sheet1
+
+    spreadsheet = client.open("juggler_data")
+
+    try:
+        sheet = spreadsheet.worksheet(machine_name)
+    except:
+        sheet = spreadsheet.add_worksheet(title=machine_name, rows="1000", cols="20")
+        sheet.append_row([
+            "日時","機種","ホール","台番号",
+            "現在回転","前任者回転",
+            "ぶどう","チェリー",
+            "BIG","REG",
+            "投資","回収"
+        ])
+
+    return sheet
 
 # ======================
 # がりぞう実戦値
@@ -196,7 +211,16 @@ if total_spin > 1000 and reg_total > 0:
     st.plotly_chart(fig)
 
 # ======================
-# 保存
+# 複数台入力（追加）
+# ======================
+st.header("📥複数台データ入力")
+multi_data = st.text_area(
+    "CSV形式（台番号,現在回転,前任者回転,ぶどう,チェリー,BIG,REG,投資,回収）",
+    height=150
+)
+
+# ======================
+# 保存（拡張）
 # ======================
 st.header("💾保存")
 
@@ -204,10 +228,13 @@ investment = st.number_input("投資", 0)
 recovery = st.number_input("回収", 0)
 
 if st.button("保存"):
-    sheet = connect_sheet()
+    sheet = connect_sheet(machine)
     now = datetime.datetime.now()
 
-    sheet.append_row([
+    rows = []
+
+    # 単体
+    rows.append([
         now.strftime("%Y-%m-%d %H:%M"),
         machine,shop,machine_no,
         spin,prev_spin,
@@ -216,7 +243,35 @@ if st.button("保存"):
         investment,recovery
     ])
 
-    st.success("保存完了")
+    # 複数
+    if multi_data:
+        lines = multi_data.strip().split("\n")
+
+        for line in lines:
+            try:
+                d = line.split(",")
+
+                rows.append([
+                    now.strftime("%Y-%m-%d %H:%M"),
+                    machine,
+                    shop,
+                    d[0],
+                    int(d[1]),
+                    int(d[2]),
+                    int(d[3]),
+                    int(d[4]),
+                    int(d[5]),
+                    int(d[6]),
+                    int(d[7]),
+                    int(d[8])
+                ])
+            except:
+                st.warning(f"入力エラー: {line}")
+
+    for r in rows:
+        sheet.append_row(r)
+
+    st.success(f"{len(rows)}件 保存完了")
 
 # ======================
 # 履歴分析
@@ -225,7 +280,7 @@ st.header("📊履歴分析")
 
 if st.button("履歴読み込み"):
 
-    sheet = connect_sheet()
+    sheet = connect_sheet(machine)
     df = pd.DataFrame(sheet.get_all_records())
 
     if len(df)>0:
@@ -254,7 +309,7 @@ target_date = st.date_input("日付", datetime.date.today())
 
 if st.button("AI分析"):
 
-    sheet = connect_sheet()
+    sheet = connect_sheet(machine)
     df = pd.DataFrame(sheet.get_all_records())
 
     if len(df)>0:
