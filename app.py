@@ -249,9 +249,9 @@ with c2:
             count += 1
         st.success(f"{count}台 保存完了")
 # ======================
-# 🧠 設定推測AI（完全統合）
+# 🧠 設定推測AI（横棒グラフ＋％表示）
 # ======================
-st.header("🧠 設定推測AI（拡張）")
+st.header("🧠 設定推測AI（確率表示）")
 
 if total_spin > 0:
 
@@ -265,65 +265,94 @@ if total_spin > 0:
         s = data[setting]
         score = 0
 
-        # ===== REG =====
         if "reg" in s and reg_total > 0:
             reg_rate = total_spin / reg_total
             score += weights.get("reg",0) * abs(reg_rate - s["reg"])
 
-        # ===== ぶどう =====
         if "grape" in s and grape > 0:
             grape_rate = total_spin / grape
             score += weights.get("grape",0) * abs(grape_rate - s["grape"])
 
-        # ===== チェリーREG =====
         if "cherry_reg" in s and reg_total > 0:
             cherry_reg_rate = reg_cherry / reg_total
             score += weights.get("cherry_reg",0) * abs(cherry_reg_rate - s["cherry_reg"])
 
-        # ===== ミスター系 =====
         if "pierrot" in s and pierrot > 0:
-            pierrot_rate = total_spin / pierrot
-            score += weights.get("pierrot",0) * abs(pierrot_rate - s["pierrot"])
+            score += weights.get("pierrot",0) * abs((total_spin / pierrot) - s["pierrot"])
 
         if "bell" in s and bell > 0:
-            bell_rate = total_spin / bell
-            score += weights.get("bell",0) * abs(bell_rate - s["bell"])
+            score += weights.get("bell",0) * abs((total_spin / bell) - s["bell"])
 
         if "cherry_big" in s and big_total > 0:
-            cherry_big_rate = big_cherry / big_total
-            score += weights.get("cherry_big",0) * abs(cherry_big_rate - s["cherry_big"])
+            score += weights.get("cherry_big",0) * abs((big_cherry / big_total) - s["cherry_big"])
 
         if "pierrot_big" in s and big_total > 0:
-            pierrot_big_rate = big_pierrot / big_total
-            score += weights.get("pierrot_big",0) * abs(pierrot_big_rate - s["pierrot_big"])
+            score += weights.get("pierrot_big",0) * abs((big_pierrot / big_total) - s["pierrot_big"])
 
         if "pierrot_reg" in s and reg_total > 0:
-            pierrot_reg_rate = reg_pierrot / reg_total
-            score += weights.get("pierrot_reg",0) * abs(pierrot_reg_rate - s["pierrot_reg"])
+            score += weights.get("pierrot_reg",0) * abs((reg_pierrot / reg_total) - s["pierrot_reg"])
 
         scores[setting] = score
 
-    # ===== 推定 =====
-    best = min(scores, key=scores.get)
+    # ======================
+    # ★ スコア → 確率変換
+    # ======================
+    max_score = max(scores.values())
+    min_score = min(scores.values())
 
-    st.subheader(f"🎯 推定設定：設定{best}")
+    probs = {}
 
-    # ===== 信頼度（簡易） =====
-    sorted_scores = sorted(scores.items(), key=lambda x: x[1])
-    if len(sorted_scores) > 1:
-        diff = sorted_scores[1][1] - sorted_scores[0][1]
-        confidence = max(0, min(100, int(100 - diff * 100)))
-        st.write(f"信頼度：約{confidence}%")
+    for k,v in scores.items():
+        # 逆転（小さいほど良い → 大きいほど良い）
+        if max_score - min_score == 0:
+            probs[k] = 100/6
+        else:
+            inv = max_score - v
+            probs[k] = inv
 
-    # ===== グラフ =====
+    # 正規化（％）
+    total = sum(probs.values())
+    for k in probs:
+        probs[k] = round((probs[k] / total) * 100, 1)
+
+    # ======================
+    # 推定
+    # ======================
+    best = max(probs, key=probs.get)
+    st.subheader(f"🎯 推定設定：設定{best}（{probs[best]}%）")
+
+    # ======================
+    # 横棒グラフ
+    # ======================
     df = pd.DataFrame({
-        "設定": list(scores.keys()),
-        "ズレ": list(scores.values())
+        "設定": [f"設定{k}" for k in probs.keys()],
+        "確率": list(probs.values())
     })
 
-    st.bar_chart(df.set_index("設定"))
+    df = df.sort_values("確率", ascending=True)
 
-    # ===== 詳細 =====
+    fig = go.Figure(go.Bar(
+        x=df["確率"],
+        y=df["設定"],
+        orientation='h'
+    ))
+
+    fig.update_layout(
+        xaxis_title="信頼度（%）",
+        yaxis_title="設定",
+        height=400
+    )
+
+    st.plotly_chart(fig, use_container_width=True)
+
+    # ======================
+    # 詳細
+    # ======================
+    with st.expander("詳細（確率）"):
+        st.write(probs)
+
+else:
+    st.info("回転数を入力するとAI推測が動きます")
     with st.expander("詳細スコア"):
         st.write(scores)
 
