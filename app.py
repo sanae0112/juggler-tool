@@ -163,7 +163,7 @@ pierrot = st.number_input("ピエロ", 0)
 bell = st.number_input("ベル", 0)
 
 # ======================
-# 複数台UI（機種選択付き）
+# 複数台UI 修正版
 # ======================
 st.header("📥追加：複数台入力（UI＋機種選択）")
 
@@ -174,27 +174,24 @@ if st.button("➕ 台を追加"):
     st.session_state.multi_rows.append({})
 
 for i, row in enumerate(st.session_state.multi_rows):
-
-    c0,c1,c2,c3,c4,c5 = st.columns(6)
-
     c0,c1,c2,c3,c4,c5,c6 = st.columns(7)
 
-row["日付"] = c0.date_input("日付", key=f"date{i}")
-row["機種"] = c1.selectbox("機種", list(garizo_specs.keys()), key=f"mm{i}")
-row["台番号"] = c2.text_input("台番号", key=f"mno{i}")
-row["回転"] = c3.number_input("回転", key=f"msp{i}")
-row["BIG"] = c4.number_input("BIG", key=f"mb{i}")
-row["REG"] = c5.number_input("REG", key=f"mr{i}")
-row["差枚"] = c6.number_input("差枚", key=f"md{i}")
+    row["日付"] = c0.date_input("日付", key=f"date{i}")
+    row["機種"] = c1.selectbox("機種", list(garizo_specs.keys()), key=f"mm{i}")
+    row["台番号"] = c2.text_input("台番号", key=f"mno{i}")
+    row["回転"] = c3.number_input("回転", key=f"msp{i}")
+    row["BIG"] = c4.number_input("BIG", key=f"mb{i}")
+    row["REG"] = c5.number_input("REG", key=f"mr{i}")
+    row["差枚"] = c6.number_input("差枚", key=f"md{i}")
 
-    # ★修正ポイント
     big_p = row["回転"]/row["BIG"] if row["BIG"] > 0 else None
     reg_p = row["回転"]/row["REG"] if row["REG"] > 0 else None
 
-   def fmt(v):
-    if v is None:
-        return "-"
-    return f"{v:.1f}"
+    def fmt(v):
+        if v is None:
+            return "-"
+        return f"{v:.1f}"
+
     def col(v):
         if v is None:
             return "gray"
@@ -254,8 +251,9 @@ with c2:
             ])
             count += 1
         st.success(f"{count}台 保存完了")
-        # ======================
-# 🧠 設定推測AI（横棒グラフ＋％表示）
+
+# ======================
+# 🧠 設定推測AI
 # ======================
 st.header("🧠 設定推測AI（確率表示）")
 
@@ -271,22 +269,18 @@ if total_spin > 0:
         s = data[setting]
         score = 0
 
-        # ===== REG =====
         if "reg" in s and reg_total > 0:
             reg_rate = total_spin / reg_total
             score += weights.get("reg",0) * abs(reg_rate - s["reg"])
 
-        # ===== ぶどう =====
         if "grape" in s and grape > 0:
             grape_rate = total_spin / grape
             score += weights.get("grape",0) * abs(grape_rate - s["grape"])
 
-        # ===== チェリーREG =====
         if "cherry_reg" in s and reg_total > 0:
             cherry_reg_rate = reg_cherry / reg_total
             score += weights.get("cherry_reg",0) * abs(cherry_reg_rate - s["cherry_reg"])
 
-        # ===== ミスター系 =====
         if "pierrot" in s and pierrot > 0:
             score += weights.get("pierrot",0) * abs((total_spin / pierrot) - s["pierrot"])
 
@@ -304,9 +298,6 @@ if total_spin > 0:
 
         scores[setting] = score
 
-    # ======================
-    # スコア → 確率変換
-    # ======================
     max_score = max(scores.values())
     min_score = min(scores.values())
 
@@ -322,15 +313,9 @@ if total_spin > 0:
     for k in probs:
         probs[k] = round((probs[k] / total) * 100, 1)
 
-    # ======================
-    # 推定表示
-    # ======================
     best = max(probs, key=probs.get)
     st.subheader(f"🎯 推定設定：設定{best}（{probs[best]}%）")
 
-    # ======================
-    # 横棒グラフ
-    # ======================
     df = pd.DataFrame({
         "設定": [f"設定{k}" for k in probs.keys()],
         "確率": list(probs.values())
@@ -352,15 +337,13 @@ if total_spin > 0:
 
     st.plotly_chart(fig, use_container_width=True)
 
-    # ======================
-    # 詳細
-    # ======================
     with st.expander("詳細（確率）"):
         st.write(probs)
 
 else:
     st.info("回転数を入力するとAI推測が動きます")
-    # ======================
+
+# ======================
 # 🎯 打つ / ヤメ判定AI
 # ======================
 st.header("🎯 打つ・ヤメ判定")
@@ -402,33 +385,6 @@ def evaluate_row(spin, big, reg):
         return "低"
 
 # ======================
-# 💾 保存処理（評価付き）
-# ======================
-def save_with_eval(row, mode):
-    now = datetime.datetime.now()
-
-    weekday = now.strftime("%A")  # 曜日
-
-    eval_result = evaluate_row(row["回転"], row["BIG"], row["REG"])
-
-    sheet = connect_sheet_mode(row["機種"], mode)
-
-    sheet.append_row([
-        now.strftime("%Y-%m-%d %H:%M"),
-        weekday,
-        row["機種"],
-        shop,
-        row["台番号"],
-        row["回転"],
-        0,0,0,
-        row["BIG"],
-        row["REG"],
-        0,
-        row["差枚"],
-        eval_result
-    ])
-
-# ======================
 # 🧠 おすすめ台AI
 # ======================
 st.header("🧠 おすすめ台AI")
@@ -442,7 +398,6 @@ if st.button("おすすめ台を分析"):
     if len(df) > 0:
         result = df.groupby("台番号")["投資"].count()
 
-        # 評価集計
         eval_counts = df.groupby(["台番号","回収"]).size().unstack(fill_value=0)
 
         scores = {}
@@ -464,6 +419,7 @@ if st.button("おすすめ台を分析"):
             st.success(f"🔥おすすめ台：{best_machine}")
 
             st.write(scores)
+
 # ======================
 # 🧠 総合おすすめAI（曜日×ホール×台）
 # ======================
@@ -480,7 +436,6 @@ if st.button("最強おすすめ分析"):
         st.warning("データがありません")
     else:
 
-        # ===== 評価数値化 =====
         def score_map(x):
             if x == "高": return 2
             if x == "中": return 1
@@ -489,16 +444,10 @@ if st.button("最強おすすめ分析"):
 
         df["score"] = df["評価"].map(score_map)
 
-        # ===== 台別 =====
         machine_score = df.groupby("台番号")["score"].mean()
-
-        # ===== 曜日別 =====
         weekday_score = df.groupby("曜日")["score"].mean()
-
-        # ===== ホール別 =====
         hall_score = df.groupby("ホール")["score"].mean()
 
-        # ===== 総合スコア =====
         total_scores = {}
 
         for _, row in df.iterrows():
@@ -514,13 +463,11 @@ if st.button("最強おすすめ分析"):
 
             total_scores[m] = score
 
-        # ===== 最強台 =====
         if total_scores:
             best = max(total_scores, key=total_scores.get)
 
             st.success(f"🔥最強おすすめ台：{best}")
 
-            # 可視化
             df_score = pd.DataFrame({
                 "台番号": list(total_scores.keys()),
                 "スコア": list(total_scores.values())
