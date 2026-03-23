@@ -177,18 +177,24 @@ for i, row in enumerate(st.session_state.multi_rows):
 
     c0,c1,c2,c3,c4,c5 = st.columns(6)
 
-    row["機種"] = c0.selectbox("機種", list(garizo_specs.keys()), key=f"mm{i}")
-    row["台番号"] = c1.text_input("台番号", key=f"mno{i}")
-    row["回転"] = c2.number_input("回転", key=f"msp{i}")
-    row["BIG"] = c3.number_input("BIG", key=f"mb{i}")
-    row["REG"] = c4.number_input("REG", key=f"mr{i}")
-    row["差枚"] = c5.number_input("差枚", key=f"md{i}")
+    c0,c1,c2,c3,c4,c5,c6 = st.columns(7)
+
+row["日付"] = c0.date_input("日付", key=f"date{i}")
+row["機種"] = c1.selectbox("機種", list(garizo_specs.keys()), key=f"mm{i}")
+row["台番号"] = c2.text_input("台番号", key=f"mno{i}")
+row["回転"] = c3.number_input("回転", key=f"msp{i}")
+row["BIG"] = c4.number_input("BIG", key=f"mb{i}")
+row["REG"] = c5.number_input("REG", key=f"mr{i}")
+row["差枚"] = c6.number_input("差枚", key=f"md{i}")
 
     # ★修正ポイント
     big_p = row["回転"]/row["BIG"] if row["BIG"] > 0 else None
     reg_p = row["回転"]/row["REG"] if row["REG"] > 0 else None
 
-    def fmt(v): return f"{v:,.1f}" if v else "-"
+   def fmt(v):
+    if v is None:
+        return "-"
+    return f"{v:.1f}"
     def col(v):
         if v is None:
             return "gray"
