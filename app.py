@@ -4,6 +4,11 @@ import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import plotly.graph_objects as go
+import pytesseract
+import cv2
+import numpy as np
+from PIL import Image
+import re
 
 st.set_page_config(page_title="Juggler Analyzer AI PRO", layout="wide")
 st.title("🎰 Juggler Analyzer AI PRO【上尾UNO】")
@@ -37,7 +42,7 @@ def connect_sheet(sheet_name, headers=None):
     return sheet
 
 # =============================
-# 評価
+# 評価関数
 # =============================
 def evaluate(spin,big,reg):
     if spin == 0 or (big+reg)==0:
@@ -52,33 +57,106 @@ def evaluate(spin,big,reg):
         return "低"
 
 # =============================
+# OCR 日付判定
+# =============================
+def get_date_from_text(text):
+    today = datetime.date.today()
+
+    if "本日" in text:
+        return today.strftime("%Y-%m-%d")
+    elif "1日前" in text:
+        return (today - datetime.timedelta(days=1)).strftime("%Y-%m-%d")
+    elif "2日前" in text:
+        return (today - datetime.timedelta(days=2)).strftime("%Y-%m-%d")
+    elif "3日前" in text:
+        return (today - datetime.timedelta(days=3)).strftime("%Y-%m-%d")
+    elif "4日前" in text:
+        return (today - datetime.timedelta(days=4)).strftime("%Y-%m-%d")
+    elif "5日前" in text:
+        return (today - datetime.timedelta(days=5)).strftime("%Y-%m-%d")
+    else:
+        return today.strftime("%Y-%m-%d")
+
+# =============================
 # タブ
 # =============================
-tab1, tab2, tab3, tab4 = st.tabs(["①DMMコピペ", "②個人カウント", "③複数台入力", "④AI分析"])
+tab1, tab2, tab3, tab4 = st.tabs(["①DMM OCR/コピペ", "②個人カウント", "③複数台入力", "④AI分析"])
 
 # =============================
-# ① DMMコピペ保存
+# ① OCR + コピペ
 # =============================
 with tab1:
-    st.header("DMMデータ コピペ保存")
+    st.header("DMMデータ OCR / コピペ保存")
 
-    st.write("DMMの表をコピーして下に貼り付け")
+    st.subheader("① OCR（スクショ読み取り）")
+    uploaded_file = st.file_uploader("スクショ画像をアップ", type=["png","jpg","jpeg"])
 
-    paste_data = st.text_area("ここに貼り付け")
+    if uploaded_file is not None:
+        image = Image.open(uploaded_file)
+        img = np.array(image)
 
-    if st.button("DMMデータ保存"):
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        gray = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY)[1]
+
+        text = pytesseract.image_to_string(gray, lang="jpn+eng")
+
+        st.text("OCR読み取り結果")
+        st.text(text)
+
+        sheet_date = get_date_from_text(text)
+        st.write("保存先シート:", sheet_date)
+
+        lines = text.split("\n")
+        data = []
+
+        for line in lines:
+            nums = re.findall(r'-?\d+', line)
+            if len(nums) >= 5:
+                try:
+                    machine_no = nums[0]
+                    big = int(nums[1])
+                    reg = int(nums[2])
+                    spin = int(nums[3])
+                    diff = int(nums[4])
+
+                    gassan = spin / (big + reg) if (big + reg) > 0 else 0
+                    reg_prob = spin / reg if reg > 0 else 0
+
+                    data.append([
+                        machine_no,"マイジャグラーV",spin,big,reg,
+                        round(gassan,1),round(reg_prob,1),diff
+                    ])
+                except:
+                    pass
+
+        df = pd.DataFrame(data, columns=[
+            "台番","機種","回転数","BIG","REG","合算","REG確率","差枚"
+        ])
+
+        st.dataframe(df)
+
+        if st.button("OCRデータ保存"):
+            sheet = connect_sheet(sheet_date, df.columns.tolist())
+            for _, row in df.iterrows():
+                sheet.append_row(row.tolist())
+            st.success(f"{sheet_date} に保存しました")
+
+    st.subheader("② コピペ保存")
+    paste_data = st.text_area("DMM表をコピーして貼り付け")
+
+    if st.button("コピペデータ保存"):
         lines = paste_data.split("\n")
         data = []
 
         for line in lines:
-            cols = line.split()
-            if len(cols) >= 5:
+            nums = re.findall(r'-?\d+', line)
+            if len(nums) >= 5:
                 try:
-                    machine_no = cols[0]
-                    big = int(cols[1])
-                    reg = int(cols[2])
-                    spin = int(cols[3].replace(",", ""))
-                    diff = int(cols[4].replace(",", ""))
+                    machine_no = nums[0]
+                    big = int(nums[1])
+                    reg = int(nums[2])
+                    spin = int(nums[3])
+                    diff = int(nums[4])
 
                     gassan = spin / (big + reg) if (big + reg) > 0 else 0
                     reg_prob = spin / reg if reg > 0 else 0
@@ -118,7 +196,7 @@ with tab2:
     col1,col2,col3 = st.columns(3)
 
     with col1:
-        machine_no = st.text_input("台番号", key="input_machine_no")
+        machine_no = st.text_input("台番号")
         spin = st.number_input("現在回転",0)
         prev_spin = st.number_input("前任者回転",0)
 
