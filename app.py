@@ -8,9 +8,10 @@ from oauth2client.service_account import ServiceAccountCredentials
 import plotly.graph_objects as go
 
 st.set_page_config(page_title="Juggler Analyzer AI PRO", layout="wide")
-st.title("🎰 Juggler Analyzer AI PRO【UNO】")
+st.title("🎰 Juggler Analyzer AI PRO【上尾UNO】")
 
 SHOP_NAME = "上尾UNO"
+SPREADSHEET_NAME = "上尾UNO"
 DMM_JACKPOT_URL = "https://p-town.dmm.com/shops/saitama/3602/jackpot"
 
 # =============================
@@ -26,19 +27,16 @@ def get_gspread_client():
     client = gspread.authorize(credentials)
     return client
 
-def connect_sheet(sheet_name):
+def connect_sheet(sheet_name, headers=None):
     client = get_gspread_client()
-    spreadsheet = client.open("juggler_data")
+    spreadsheet = client.open(SPREADSHEET_NAME)
 
     try:
         sheet = spreadsheet.worksheet(sheet_name)
     except:
         sheet = spreadsheet.add_worksheet(title=sheet_name, rows="2000", cols="20")
-        sheet.append_row([
-            "日時","曜日","機種","ホール","台番号",
-            "回転","前任者回転","ぶどう","チェリー",
-            "BIG","REG","投資","回収","評価"
-        ])
+        if headers:
+            sheet.append_row(headers)
     return sheet
 
 # =============================
@@ -78,6 +76,27 @@ def get_dmm_data():
     ])
 
 # =============================
+# DMMデータを日付シートへ自動保存
+# =============================
+def save_dmm_to_sheet():
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    headers = ["台番","機種","回転数","BIG","REG","合算","REG確率","差枚"]
+
+    sheet = connect_sheet(today, headers)
+    df = get_dmm_data()
+
+    # 既存データ取得（重複防止）
+    existing = sheet.get_all_values()
+    existing_rows = len(existing)
+
+    if existing_rows <= 1:
+        for _, row in df.iterrows():
+            sheet.append_row(row.tolist())
+
+# 起動時に自動取得
+save_dmm_to_sheet()
+
+# =============================
 # 評価
 # =============================
 def evaluate(spin,big,reg):
@@ -98,20 +117,24 @@ def evaluate(spin,big,reg):
 tab1, tab2, tab3, tab4 = st.tabs(["①DMMデータ", "②個人カウント", "③複数台入力", "④AI分析"])
 
 # =============================
-# ① DMM
+# ① DMM表示
 # =============================
 with tab1:
-    st.header("DMMデータ取得")
+    st.header("本日のDMMデータ")
 
-    if st.button("DMMデータ取得"):
-        df = get_dmm_data()
-        st.dataframe(df)
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    sheet = connect_sheet(today)
+    data = sheet.get_all_records()
+    df = pd.DataFrame(data)
 
+    st.dataframe(df)
+
+    if len(df) > 0:
         st.subheader("差枚ランキング")
         st.dataframe(df.sort_values("差枚", ascending=False).head(10))
 
 # =============================
-# ② 個人カウント
+# ② 個人カウント（保存先：個人データ）
 # =============================
 with tab2:
     st.header("個人詳細データ")
@@ -125,7 +148,7 @@ with tab2:
     col1,col2,col3 = st.columns(3)
 
     with col1:
-        machine_no = st.text_input("台番号")
+        machine_no = st.text_input("台番号", key="input_machine_no")
         spin = st.number_input("現在回転",0)
         prev_spin = st.number_input("前任者回転",0)
 
@@ -142,21 +165,18 @@ with tab2:
     total_spin = spin + prev_spin
     st.write("総回転:", total_spin)
 
-    if total_spin > 0 and reg > 0:
-        reg_rate = total_spin / reg
-        if reg_rate < 270:
-            st.success("設定5以上期待")
-        elif reg_rate < 300:
-            st.warning("設定4以上")
-        else:
-            st.error("低設定")
-
     if st.button("個人データ保存"):
         now = datetime.datetime.now()
         weekday = now.strftime("%A")
         eval_result = evaluate(total_spin,big,reg)
 
-        sheet = connect_sheet(machine+"_自分")
+        headers = [
+            "日時","曜日","機種","ホール","台番号",
+            "回転","前任者回転","ぶどう","チェリー",
+            "BIG","REG","投資","回収","評価"
+        ]
+
+        sheet = connect_sheet("個人データ", headers)
 
         sheet.append_row([
             now.strftime("%Y-%m-%d %H:%M"),
@@ -177,7 +197,7 @@ with tab2:
         st.success("保存完了")
 
 # =============================
-# ③ 複数台
+# ③ 複数台入力
 # =============================
 with tab3:
     st.header("複数台入力（他人データ）")
@@ -190,21 +210,33 @@ with tab3:
 
     for i,row in enumerate(st.session_state.rows):
         c1,c2,c3,c4,c5,c6 = st.columns(6)
-        row["機種"] = c1.selectbox("機種",[
-            "マイジャグラーV","アイムジャグラーEX","ファンキージャグラー2",
-            "ゴージャグラー3","ハッピージャグラーV3",
-            "ミスタージャグラー","ジャグラーガールズ","ウルトラミラクルジャグラー"
-        ],key=i)
-        row["台番号"] = c2.text_input("台番号",key=str(i))
-        row["回転"] = c3.number_input("回転",key="s"+str(i))
-        row["BIG"] = c4.number_input("BIG",key="b"+str(i))
-        row["REG"] = c5.number_input("REG",key="r"+str(i))
-        row["差枚"] = c6.number_input("差枚",key="d"+str(i))
+
+        row["機種"] = c1.selectbox(
+            "機種",
+            [
+                "マイジャグラーV","アイムジャグラーEX","ファンキージャグラー2",
+                "ゴージャグラー3","ハッピージャグラーV3",
+                "ミスタージャグラー","ジャグラーガールズ","ウルトラミラクルジャグラー"
+            ],
+            key=f"machine_{i}"
+        )
+
+        row["台番号"] = c2.text_input("台番号", key=f"machine_no_{i}")
+        row["回転"] = c3.number_input("回転", key=f"spin_{i}")
+        row["BIG"] = c4.number_input("BIG", key=f"big_{i}")
+        row["REG"] = c5.number_input("REG", key=f"reg_{i}")
+        row["差枚"] = c6.number_input("差枚", key=f"diff_{i}")
 
     if st.button("他人データ保存"):
         now = datetime.datetime.now()
+        headers = [
+            "日時","曜日","機種","ホール","台番号",
+            "回転","前任者回転","ぶどう","チェリー",
+            "BIG","REG","投資","回収","評価"
+        ]
+        sheet = connect_sheet("他人データ", headers)
+
         for row in st.session_state.rows:
-            sheet = connect_sheet(row["機種"]+"_他人")
             sheet.append_row([
                 now.strftime("%Y-%m-%d %H:%M"),
                 now.strftime("%A"),
@@ -222,44 +254,29 @@ with tab3:
         st.success("保存完了")
 
 # =============================
-# ④ AI分析（全機種）
+# ④ AI分析
 # =============================
 with tab4:
-    st.header("おすすめ台AI（全機種）")
+    st.header("おすすめ台AI")
 
-    machines = [
-        "マイジャグラーV","アイムジャグラーEX","ファンキージャグラー2",
-        "ゴージャグラー3","ハッピージャグラーV3",
-        "ミスタージャグラー","ジャグラーガールズ","ウルトラミラクルジャグラー"
-    ]
+    sheet = connect_sheet("個人データ")
+    data = sheet.get_all_records()
+    df = pd.DataFrame(data)
 
-    if st.button("おすすめ台分析（全機種）"):
-        all_data = pd.DataFrame()
+    if len(df) > 0:
+        score_map = {"高":2,"中":1,"低":-1}
+        df["score"] = df["評価"].map(score_map)
 
-        for machine in machines:
-            try:
-                sheet = connect_sheet(machine+"_自分")
-                data = sheet.get_all_records()
-                df = pd.DataFrame(data)
-                all_data = pd.concat([all_data, df])
-            except:
-                pass
+        result = df.groupby("台番号")["score"].mean()
+        best = result.idxmax()
 
-        if len(all_data) > 0:
-            score_map = {"高":2,"中":1,"低":-1}
-            all_data["score"] = all_data["評価"].map(score_map)
+        st.success(f"おすすめ台：{best}")
 
-            result = all_data.groupby("台番号")["score"].mean()
-
-            best = result.idxmax()
-            st.success(f"🔥全機種おすすめ台：{best}")
-
-            fig = go.Figure(go.Bar(
-                x=result.values,
-                y=result.index,
-                orientation='h'
-            ))
-            st.plotly_chart(fig, use_container_width=True)
-
-        else:
-            st.warning("データがまだありません")
+        fig = go.Figure(go.Bar(
+            x=result.values,
+            y=result.index,
+            orientation='h'
+        ))
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.warning("個人データがまだありません")
