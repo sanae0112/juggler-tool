@@ -1,8 +1,6 @@
 import streamlit as st
 import pandas as pd
 import datetime
-import requests
-from bs4 import BeautifulSoup
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 import plotly.graph_objects as go
@@ -12,7 +10,6 @@ st.title("🎰 Juggler Analyzer AI PRO【上尾UNO】")
 
 SHOP_NAME = "上尾UNO"
 SPREADSHEET_NAME = "上尾UNO"
-DMM_JACKPOT_URL = "https://p-town.dmm.com/shops/saitama/3602/jackpot"
 
 # =============================
 # Google Sheets接続
@@ -40,63 +37,6 @@ def connect_sheet(sheet_name, headers=None):
     return sheet
 
 # =============================
-# DMMデータ取得
-# =============================
-def get_dmm_data():
-    headers = {"User-Agent": "Mozilla/5.0"}
-    res = requests.get(DMM_JACKPOT_URL, headers=headers)
-    soup = BeautifulSoup(res.text, "html.parser")
-
-    data = []
-    rows = soup.select("table tr")
-
-    for row in rows[1:]:
-        cols = row.find_all("td")
-        if len(cols) >= 6:
-            try:
-                machine_no = cols[0].text.strip()
-                machine_name = cols[1].text.strip()
-                big = int(cols[2].text.strip())
-                reg = int(cols[3].text.strip())
-                spin = int(cols[4].text.strip().replace(",", ""))
-                diff = int(cols[5].text.strip().replace(",", ""))
-
-                gassan = spin / (big + reg) if (big + reg) > 0 else 0
-                reg_prob = spin / reg if reg > 0 else 0
-
-                data.append([
-                    machine_no, machine_name, spin, big, reg,
-                    round(gassan,1), round(reg_prob,1), diff
-                ])
-            except:
-                pass
-
-    return pd.DataFrame(data, columns=[
-        "台番","機種","回転数","BIG","REG","合算","REG確率","差枚"
-    ])
-
-# =============================
-# DMMデータを日付シートへ自動保存
-# =============================
-def save_dmm_to_sheet():
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    headers = ["台番","機種","回転数","BIG","REG","合算","REG確率","差枚"]
-
-    sheet = connect_sheet(today, headers)
-    df = get_dmm_data()
-
-    # 既存データ取得（重複防止）
-    existing = sheet.get_all_values()
-    existing_rows = len(existing)
-
-    if existing_rows <= 1:
-        for _, row in df.iterrows():
-            sheet.append_row(row.tolist())
-
-# 起動時に自動取得
-save_dmm_to_sheet()
-
-# =============================
 # 評価
 # =============================
 def evaluate(spin,big,reg):
@@ -114,27 +54,57 @@ def evaluate(spin,big,reg):
 # =============================
 # タブ
 # =============================
-tab1, tab2, tab3, tab4 = st.tabs(["①DMMデータ", "②個人カウント", "③複数台入力", "④AI分析"])
+tab1, tab2, tab3, tab4 = st.tabs(["①DMMコピペ", "②個人カウント", "③複数台入力", "④AI分析"])
 
 # =============================
-# ① DMM表示
+# ① DMMコピペ保存
 # =============================
 with tab1:
-    st.header("本日のDMMデータ")
+    st.header("DMMデータ コピペ保存")
 
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    sheet = connect_sheet(today)
-    data = sheet.get_all_records()
-    df = pd.DataFrame(data)
+    st.write("DMMの表をコピーして下に貼り付け")
 
-    st.dataframe(df)
+    paste_data = st.text_area("ここに貼り付け")
 
-    if len(df) > 0:
-        st.subheader("差枚ランキング")
-        st.dataframe(df.sort_values("差枚", ascending=False).head(10))
+    if st.button("DMMデータ保存"):
+        lines = paste_data.split("\n")
+        data = []
+
+        for line in lines:
+            cols = line.split()
+            if len(cols) >= 5:
+                try:
+                    machine_no = cols[0]
+                    big = int(cols[1])
+                    reg = int(cols[2])
+                    spin = int(cols[3].replace(",", ""))
+                    diff = int(cols[4].replace(",", ""))
+
+                    gassan = spin / (big + reg) if (big + reg) > 0 else 0
+                    reg_prob = spin / reg if reg > 0 else 0
+
+                    data.append([
+                        machine_no,"マイジャグラーV",spin,big,reg,
+                        round(gassan,1),round(reg_prob,1),diff
+                    ])
+                except:
+                    pass
+
+        df = pd.DataFrame(data, columns=[
+            "台番","機種","回転数","BIG","REG","合算","REG確率","差枚"
+        ])
+
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
+        sheet = connect_sheet(today, df.columns.tolist())
+
+        for _, row in df.iterrows():
+            sheet.append_row(row.tolist())
+
+        st.success("保存完了")
+        st.dataframe(df)
 
 # =============================
-# ② 個人カウント（保存先：個人データ）
+# ② 個人カウント
 # =============================
 with tab2:
     st.header("個人詳細データ")
