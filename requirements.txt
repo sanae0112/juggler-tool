@@ -3,7 +3,3 @@ pandas
 gspread
 oauth2client
 plotly
-pytesseract
-opencv-python-headless
-Pillow
-numpy
