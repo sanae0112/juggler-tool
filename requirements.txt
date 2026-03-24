@@ -1,7 +1,8 @@
 streamlit
 pandas
-requests
-beautifulsoup4
 gspread
 oauth2client
 plotly
+pytesseract
+opencv-python
+Pillow
