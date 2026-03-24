@@ -4,5 +4,6 @@ gspread
 oauth2client
 plotly
 pytesseract
-opencv-python
+opencv-python-headless
 Pillow
+numpy
