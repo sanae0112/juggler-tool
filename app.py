@@ -13,7 +13,7 @@ SHOP_NAME = "上尾UNO"
 SPREADSHEET_NAME = "上尾UNO"
 
 # =============================
-# 機種リスト（DMMと共通）
+# 機種リスト
 # =============================
 machine_list = [
     "マイジャグラーV",
@@ -27,7 +27,7 @@ machine_list = [
 ]
 
 # =============================
-# がりぞう実戦値（AI対応機種のみ）
+# がりぞう実戦値
 # =============================
 garizo_specs = {
 "マイジャグラーV":{
@@ -189,7 +189,25 @@ with tab2:
 
     st.write("総回転:", total_spin)
 
-    # ===== AI設定推測（対応機種のみ）=====
+    # =============================
+    # 確率自動計算（追加部分）
+    # =============================
+    if total_spin > 0:
+        if big_total > 0:
+            st.write("BIG確率：1/", round(total_spin / big_total, 1))
+        if reg_total > 0:
+            st.write("REG確率：1/", round(total_spin / reg_total, 1))
+        if (big_total + reg_total) > 0:
+            st.write("合算：1/", round(total_spin / (big_total + reg_total), 1))
+        if grape > 0:
+            st.write("ぶどう確率：1/", round(total_spin / grape, 2))
+        if cherry > 0:
+            st.write("チェリー確率：1/", round(total_spin / cherry, 2))
+        if reg_total > 0:
+            st.write("単独REG率：", round(reg_single / reg_total * 100, 1), "%")
+            st.write("チェリーREG率：", round(reg_cherry / reg_total * 100, 1), "%")
+
+    # ===== AI設定推測 =====
     if machine in garizo_specs and total_spin>0 and reg_total>0 and grape>0:
         spec = garizo_specs[machine]
         weights = spec["weights"]
