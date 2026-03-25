@@ -13,7 +13,21 @@ SHOP_NAME = "上尾UNO"
 SPREADSHEET_NAME = "上尾UNO"
 
 # =============================
-# がりぞう実戦値
+# 機種リスト（DMMと共通）
+# =============================
+machine_list = [
+    "マイジャグラーV",
+    "アイムジャグラーEX",
+    "ファンキージャグラー2",
+    "ゴーゴージャグラー3",
+    "ハッピージャグラーV3",
+    "ミスタージャグラー",
+    "ジャグラーガールズSS",
+    "ウルトラミラクルジャグラー"
+]
+
+# =============================
+# がりぞう実戦値（AI対応機種のみ）
 # =============================
 garizo_specs = {
 "マイジャグラーV":{
@@ -89,12 +103,7 @@ tab1, tab2, tab3, tab4 = st.tabs(["①DMMコピペ", "②個人カウント", "�
 with tab1:
     st.header("DMMデータ コピペ保存")
 
-    machine_name = st.selectbox("機種を選択", [
-        "マイジャグラーV","アイムジャグラーEX","ファンキージャグラー2",
-        "ゴージャグラー3","ハッピージャグラーV3",
-        "ミスタージャグラー","ジャグラーガールズ","ウルトラミラクルジャグラー"
-    ])
-
+    machine_name = st.selectbox("機種を選択", machine_list)
     paste_data = st.text_area("DMM表をコピーして貼り付け")
 
     if st.button("コピペデータ保存"):
@@ -140,12 +149,12 @@ with tab1:
         st.success("保存完了（本日〜6日前）")
 
 # =============================
-# ② 個人カウント（完全版）
+# ② 個人カウント
 # =============================
 with tab2:
     st.header("個人詳細データ")
 
-    machine = st.selectbox("機種", list(garizo_specs.keys()))
+    machine = st.selectbox("機種", machine_list)
     machine_no = st.text_input("台番号")
 
     col1,col2,col3 = st.columns(3)
@@ -177,10 +186,11 @@ with tab2:
     big_total = big_single + big_cherry
     reg_total = reg_single + reg_cherry
     total_spin = spin + prev_spin
+
     st.write("総回転:", total_spin)
 
-    # ===== がりぞうAI =====
-    if total_spin>0 and reg_total>0 and grape>0:
+    # ===== AI設定推測（対応機種のみ）=====
+    if machine in garizo_specs and total_spin>0 and reg_total>0 and grape>0:
         spec = garizo_specs[machine]
         weights = spec["weights"]
         data = spec["data"]
@@ -209,6 +219,10 @@ with tab2:
         ))
         st.plotly_chart(fig,use_container_width=True)
 
+    elif machine not in garizo_specs:
+        st.info("この機種はAI設定推測は未対応")
+
+    # 保存
     if st.button("個人データ保存"):
         now=datetime.datetime.now()
         weekday=now.strftime("%A")
@@ -245,7 +259,7 @@ with tab3:
 
     for i,row in enumerate(st.session_state.rows):
         c1,c2,c3,c4,c5,c6=st.columns(6)
-        row["機種"]=c1.text_input("機種",key=f"machine{i}")
+        row["機種"]=c1.selectbox("機種",machine_list,key=f"machine{i}")
         row["台番号"]=c2.text_input("台番号",key=f"no{i}")
         row["回転"]=c3.number_input("回転",key=f"sp{i}")
         row["BIG"]=c4.number_input("BIG",key=f"b{i}")
