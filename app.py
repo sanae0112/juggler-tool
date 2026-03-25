@@ -1,50 +1,145 @@
 import streamlit as st
 import pandas as pd
+import plotly.graph_objects as go
 import datetime
 import gspread
 from oauth2client.service_account import ServiceAccountCredentials
-import plotly.graph_objects as go
-import re
 
 st.set_page_config(page_title="Juggler Analyzer AI PRO", layout="wide")
-st.title("🎰 Juggler Analyzer AI PRO【上尾UNO】")
+st.title("🎰 Juggler Analyzer AI PRO【Ver5】")
 
-SHOP_NAME = "上尾UNO"
-SPREADSHEET_NAME = "上尾UNO"
-
-# =============================
-# Google Sheets接続
-# =============================
-def get_gspread_client():
+# ======================
+# Google Sheets接続（日付保存）
+# ======================
+def connect_sheet_date(machine_name, mode, date):
     scope = [
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-    creds_dict = dict(st.secrets["gcp_service_account"])
-    credentials = ServiceAccountCredentials.from_json_keyfile_dict(creds_dict, scope)
-    client = gspread.authorize(credentials)
-    return client
+    creds = ServiceAccountCredentials.from_json_keyfile_dict(
+        st.secrets["gcp_service_account"], scope
+    )
+    client = gspread.authorize(creds)
+    spreadsheet = client.open("juggler_data")
 
-def connect_sheet(sheet_name, headers=None):
-    client = get_gspread_client()
-    spreadsheet = client.open(SPREADSHEET_NAME)
+    sheet_name = f"{date}_{machine_name}_{mode}"
 
     try:
         sheet = spreadsheet.worksheet(sheet_name)
     except:
-        sheet = spreadsheet.add_worksheet(title=sheet_name, rows="2000", cols="20")
-        if headers:
-            sheet.append_row(headers)
+        sheet = spreadsheet.add_worksheet(title=sheet_name, rows="2000", cols="30")
+        sheet.append_row([
+            "日時","曜日","機種","ホール","台番号",
+            "総回転","前任者回転",
+            "ぶどう","チェリー","ピエロ","ベル",
+            "単独BIG","チェリーBIG","レアチェリーBIG","ピエロBIG",
+            "単独REG","チェリーREG","ピエロREG",
+            "BIG合算","REG合算",
+            "投資","回収","差枚","評価"
+        ])
     return sheet
 
-# =============================
-# 評価関数
-# =============================
-def evaluate(spin,big,reg):
-    if spin == 0 or (big+reg)==0:
+# ======================
+# 日付選択（6日前まで）
+# ======================
+st.header("📅 保存日選択")
+
+today = datetime.date.today()
+date_list = [today - datetime.timedelta(days=i) for i in range(7)]
+date_str_list = [d.strftime("%Y-%m-%d") for d in date_list]
+
+save_date = st.selectbox("保存する日付", date_str_list)
+
+# ======================
+# 機種
+# ======================
+machine_list = [
+    "マイジャグラーV",
+    "アイムジャグラーEX",
+    "ファンキージャグラー2",
+    "ゴーゴージャグラー3",
+    "ハッピージャグラーV III",
+    "ジャグラーガールズSS",
+    "ミスタージャグラー",
+    "ウルトラミラクルジャグラー"
+]
+
+# ======================
+# 基本情報
+# ======================
+st.header("📥 基本情報")
+
+col1, col2, col3 = st.columns(3)
+
+machine = col1.selectbox("機種", machine_list)
+shop = col2.text_input("ホール名")
+machine_no = col3.text_input("台番号")
+
+spin = st.number_input("現在回転", 0)
+prev_spin = st.number_input("前任者回転", 0)
+total_spin = spin + prev_spin
+
+st.write("総回転:", total_spin)
+
+# ======================
+# チェリー
+# ======================
+st.header("🍒チェリー")
+
+cherry_free = st.number_input("フリー打ち", 0)
+cherry_aim = st.number_input("狙い打ち", 0)
+cherry = cherry_aim if cherry_aim > 0 else cherry_free
+
+# ======================
+# ボーナス内訳
+# ======================
+st.header("🎰ボーナス内訳")
+
+big_single = st.number_input("単独BIG", 0)
+big_cherry = st.number_input("チェリーBIG", 0)
+big_rare = st.number_input("レアチェリーBIG", 0)
+big_pierrot = st.number_input("ピエロBIG", 0)
+
+reg_single = st.number_input("単独REG", 0)
+reg_cherry = st.number_input("チェリーREG", 0)
+reg_pierrot = st.number_input("ピエロREG", 0)
+
+big_total = big_single + big_cherry + big_rare + big_pierrot
+reg_total = reg_single + reg_cherry + reg_pierrot
+
+st.write("BIG合計:", big_total)
+st.write("REG合計:", reg_total)
+
+# ======================
+# 小役
+# ======================
+st.header("🍇小役")
+
+grape = st.number_input("ぶどう", 0)
+pierrot = st.number_input("ピエロ", 0)
+bell = st.number_input("ベル", 0)
+
+# ======================
+# 収支
+# ======================
+st.header("💰収支")
+
+invest = st.number_input("投資", 0)
+collect = st.number_input("回収", 0)
+coin = collect - invest
+
+st.write("差枚:", coin)
+
+# ======================
+# 評価
+# ======================
+def evaluate(spin, big, reg):
+    if spin == 0 or (big+reg) == 0:
         return "不明"
-    reg_rate = spin/reg if reg>0 else 999
-    combined = spin/(big+reg)
+
+    reg_rate = spin / reg if reg > 0 else 999
+    combined = spin / (big + reg)
+
     if reg_rate < 280 and combined < 120:
         return "高"
     elif reg_rate < 330:
@@ -52,235 +147,75 @@ def evaluate(spin,big,reg):
     else:
         return "低"
 
-# =============================
-# タブ
-# =============================
-tab1, tab2, tab3, tab4 = st.tabs(["①DMMコピペ", "②個人カウント", "③複数台入力", "④AI分析"])
+# ======================
+# 保存
+# ======================
+st.header("💾 保存")
 
-# =============================
-# ① DMMコピペ保存（本日〜6日前）
-# =============================
-with tab1:
-    st.header("DMMデータ コピペ保存")
+col1, col2 = st.columns(2)
 
-    machine_name = st.selectbox("機種を選択", [
-        "マイジャグラーV",
-        "アイムジャグラーEX",
-        "ファンキージャグラー2",
-        "ゴージャグラー3",
-        "ハッピージャグラーV3",
-        "ミスタージャグラー",
-        "ジャグラーガールズ",
-        "ウルトラミラクルジャグラー"
+if col1.button("🟢 自分データ保存"):
+    weekday = datetime.datetime.strptime(save_date, "%Y-%m-%d").strftime("%A")
+    eval_result = evaluate(total_spin, big_total, reg_total)
+
+    sheet = connect_sheet_date(machine, "自分", save_date)
+    sheet.append_row([
+        datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        weekday,
+        machine,
+        shop,
+        machine_no,
+        total_spin,
+        prev_spin,
+        grape,
+        cherry,
+        pierrot,
+        bell,
+        big_single,
+        big_cherry,
+        big_rare,
+        big_pierrot,
+        reg_single,
+        reg_cherry,
+        reg_pierrot,
+        big_total,
+        reg_total,
+        invest,
+        collect,
+        coin,
+        eval_result
     ])
+    st.success("保存完了")
 
-    paste_data = st.text_area("DMM表をコピーして貼り付け")
+if col2.button("🔵 他人データ保存"):
+    weekday = datetime.datetime.strptime(save_date, "%Y-%m-%d").strftime("%A")
+    eval_result = evaluate(total_spin, big_total, reg_total)
 
-    if st.button("コピペデータ保存"):
-        lines = paste_data.split("\n")
-
-        today = datetime.date.today()
-        target_date = today
-        data_by_date = {}
-
-        for line in lines:
-            if "本日" in line:
-                target_date = today
-                continue
-            elif "1日前" in line:
-                target_date = today - datetime.timedelta(days=1)
-                continue
-            elif "2日前" in line:
-                target_date = today - datetime.timedelta(days=2)
-                continue
-            elif "3日前" in line:
-                target_date = today - datetime.timedelta(days=3)
-                continue
-            elif "4日前" in line:
-                target_date = today - datetime.timedelta(days=4)
-                continue
-            elif "5日前" in line:
-                target_date = today - datetime.timedelta(days=5)
-                continue
-            elif "6日前" in line:
-                target_date = today - datetime.timedelta(days=6)
-                continue
-
-            nums = re.findall(r'-?\d+', line)
-            if len(nums) >= 5:
-                machine_no = nums[0]
-                big = int(nums[1])
-                reg = int(nums[2])
-                spin = int(nums[3])
-                diff = int(nums[4])
-
-                gassan = spin / (big + reg) if (big + reg) > 0 else 0
-                reg_prob = spin / reg if reg > 0 else 0
-
-                date_str = target_date.strftime("%Y-%m-%d")
-
-                if date_str not in data_by_date:
-                    data_by_date[date_str] = []
-
-                data_by_date[date_str].append([
-                    machine_no, machine_name, spin, big, reg,
-                    round(gassan,1), round(reg_prob,1), diff
-                ])
-
-        for date_str, data in data_by_date.items():
-            df = pd.DataFrame(data, columns=[
-                "台番","機種","回転数","BIG","REG","合算","REG確率","差枚"
-            ])
-
-            sheet = connect_sheet(date_str, df.columns.tolist())
-
-            for _, row in df.iterrows():
-                sheet.append_row(row.tolist())
-
-        st.success("本日〜6日前まで日付ごとに保存しました")
-
-# =============================
-# ② 個人カウント
-# =============================
-with tab2:
-    st.header("個人詳細データ")
-
-    machine = st.selectbox("機種", [
-        "マイジャグラーV","アイムジャグラーEX","ファンキージャグラー2",
-        "ゴージャグラー3","ハッピージャグラーV3","ミスタージャグラー",
-        "ジャグラーガールズ","ウルトラミラクルジャグラー"
+    sheet = connect_sheet_date(machine, "他人", save_date)
+    sheet.append_row([
+        datetime.datetime.now().strftime("%Y-%m-%d %H:%M"),
+        weekday,
+        machine,
+        shop,
+        machine_no,
+        total_spin,
+        prev_spin,
+        grape,
+        cherry,
+        pierrot,
+        bell,
+        big_single,
+        big_cherry,
+        big_rare,
+        big_pierrot,
+        reg_single,
+        reg_cherry,
+        reg_pierrot,
+        big_total,
+        reg_total,
+        invest,
+        collect,
+        coin,
+        eval_result
     ])
-
-    col1,col2,col3 = st.columns(3)
-
-    with col1:
-        machine_no = st.text_input("台番号")
-        spin = st.number_input("現在回転",0)
-        prev_spin = st.number_input("前任者回転",0)
-
-    with col2:
-        big = st.number_input("BIG",0)
-        reg = st.number_input("REG",0)
-        grape = st.number_input("ぶどう",0)
-        cherry = st.number_input("チェリー",0)
-
-    with col3:
-        invest = st.number_input("投資",0)
-        collect = st.number_input("回収",0)
-
-    total_spin = spin + prev_spin
-    st.write("総回転:", total_spin)
-
-    if st.button("個人データ保存"):
-        now = datetime.datetime.now()
-        weekday = now.strftime("%A")
-        eval_result = evaluate(total_spin,big,reg)
-
-        headers = [
-            "日時","曜日","機種","ホール","台番号",
-            "回転","前任者回転","ぶどう","チェリー",
-            "BIG","REG","投資","回収","評価"
-        ]
-
-        sheet = connect_sheet("個人データ", headers)
-
-        sheet.append_row([
-            now.strftime("%Y-%m-%d %H:%M"),
-            weekday,
-            machine,
-            SHOP_NAME,
-            machine_no,
-            spin,
-            prev_spin,
-            grape,
-            cherry,
-            big,
-            reg,
-            invest,
-            collect,
-            eval_result
-        ])
-        st.success("保存完了")
-
-# =============================
-# ③ 複数台入力
-# =============================
-with tab3:
-    st.header("複数台入力（他人データ）")
-
-    if "rows" not in st.session_state:
-        st.session_state.rows = []
-
-    if st.button("台追加"):
-        st.session_state.rows.append({})
-
-    for i,row in enumerate(st.session_state.rows):
-        c1,c2,c3,c4,c5,c6 = st.columns(6)
-
-        row["機種"] = c1.selectbox("機種", [
-            "マイジャグラーV","アイムジャグラーEX","ファンキージャグラー2",
-            "ゴージャグラー3","ハッピージャグラーV3",
-            "ミスタージャグラー","ジャグラーガールズ","ウルトラミラクルジャグラー"
-        ], key=f"machine_{i}")
-
-        row["台番号"] = c2.text_input("台番号", key=f"machine_no_{i}")
-        row["回転"] = c3.number_input("回転", key=f"spin_{i}")
-        row["BIG"] = c4.number_input("BIG", key=f"big_{i}")
-        row["REG"] = c5.number_input("REG", key=f"reg_{i}")
-        row["差枚"] = c6.number_input("差枚", key=f"diff_{i}")
-
-    if st.button("他人データ保存"):
-        now = datetime.datetime.now()
-
-        headers = [
-            "日時","曜日","機種","ホール","台番号",
-            "回転","前任者回転","ぶどう","チェリー",
-            "BIG","REG","投資","回収","評価"
-        ]
-
-        sheet = connect_sheet("他人データ", headers)
-
-        for row in st.session_state.rows:
-            sheet.append_row([
-                now.strftime("%Y-%m-%d %H:%M"),
-                now.strftime("%A"),
-                row["機種"],
-                SHOP_NAME,
-                row["台番号"],
-                row["回転"],
-                0,0,0,
-                row["BIG"],
-                row["REG"],
-                0,
-                row["差枚"],
-                ""
-            ])
-        st.success("保存完了")
-
-# =============================
-# ④ AI分析
-# =============================
-with tab4:
-    st.header("おすすめ台AI")
-
-    sheet = connect_sheet("個人データ")
-    data = sheet.get_all_records()
-    df = pd.DataFrame(data)
-
-    if len(df) > 0:
-        score_map = {"高":2,"中":1,"低":-1}
-        df["score"] = df["評価"].map(score_map)
-
-        result = df.groupby("台番号")["score"].mean()
-        best = result.idxmax()
-
-        st.success(f"おすすめ台：{best}")
-
-        fig = go.Figure(go.Bar(
-            x=result.values,
-            y=result.index,
-            orientation='h'
-        ))
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.warning("個人データがまだありません")
+    st.success("保存完了")
