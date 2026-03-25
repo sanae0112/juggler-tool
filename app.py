@@ -283,73 +283,61 @@ with tab3:
 # ④ ホール分析AI
 # =============================
 with tab4:
-    st.header("ホール分析AI")
+    st.header("ホール分析AI（DMM分析）")
 
-    try:
-        sheet = connect_sheet("個人データ")
-        data = sheet.get_all_records()
-        df = pd.DataFrame(data)
+    client = get_gspread_client()
+    spreadsheet = client.open(SPREADSHEET_NAME)
+    sheets = spreadsheet.worksheets()
 
-        if len(df) > 0:
-            score_map = {"高":2,"中":1,"低":-1}
-            df["score"] = df["評価"].map(score_map)
-            df["台番号"] = df["台番号"].astype(int)
+    all_data = []
 
-            # -----------------
-            # 曜日別
-            # -----------------
-            st.subheader("曜日別 勝率")
-            weekday = df.groupby("曜日")["score"].mean()
-            st.bar_chart(weekday)
+    for sheet in sheets:
+        name = sheet.title
+        if re.match(r"\d{4}-\d{2}-\d{2}", name):
+            data = sheet.get_all_records()
+            for row in data:
+                row["日付"] = name
+                all_data.append(row)
 
-            # -----------------
-            # 機種別
-            # -----------------
-            st.subheader("機種別 勝率")
-            machine = df.groupby("機種")["score"].mean()
-            st.bar_chart(machine)
+    if len(all_data) > 0:
+        df = pd.DataFrame(all_data)
 
-            # -----------------
-            # 台番号別
-            # -----------------
-            st.subheader("台番号別 勝率")
-            machine_no = df.groupby("台番号")["score"].mean()
-            st.bar_chart(machine_no)
+        # 評価スコア作成
+        def score(row):
+            if row["REG確率"] < 280 and row["合算"] < 120:
+                return 2
+            elif row["REG確率"] < 330:
+                return 1
+            else:
+                return -1
 
-            # -----------------
-            # 末尾分析
-            # -----------------
-            st.subheader("末尾 勝率")
-            df["末尾"] = df["台番号"] % 10
-            sueo = df.groupby("末尾")["score"].mean()
-            st.bar_chart(sueo)
+        df["score"] = df.apply(score, axis=1)
+        df["台番"] = df["台番"].astype(int)
 
-            # -----------------
-            # 並び分析（3台並び）
-            # -----------------
-            st.subheader("並び（3台並び）分析")
+        # 曜日
+        st.subheader("曜日別")
+        df["日付"] = pd.to_datetime(df["日付"])
+        df["曜日"] = df["日付"].dt.day_name()
+        st.bar_chart(df.groupby("曜日")["score"].mean())
 
-            df_sorted = df.sort_values("台番号")
-            df_sorted["並びスコア"] = df_sorted["score"].rolling(3).mean()
-            st.line_chart(df_sorted["並びスコア"])
+        # 機種
+        st.subheader("機種別")
+        st.bar_chart(df.groupby("機種")["score"].mean())
 
-            # -----------------
-            # 過去の傾向（時系列）
-            # -----------------
-            st.subheader("過去の傾向（評価スコア推移）")
-            df["日時"] = pd.to_datetime(df["日時"])
-            trend = df.sort_values("日時")
-            st.line_chart(trend.set_index("日時")["score"])
+        # 末尾
+        st.subheader("末尾")
+        df["末尾"] = df["台番"] % 10
+        st.bar_chart(df.groupby("末尾")["score"].mean())
 
-            # -----------------
-            # おすすめ台
-            # -----------------
-            st.subheader("総合おすすめ台")
-            best = machine_no.idxmax()
-            st.success(f"おすすめ台：{best}")
+        # 並び
+        st.subheader("並び（3台）")
+        df = df.sort_values("台番")
+        df["並び"] = df["score"].rolling(3).mean()
+        st.line_chart(df["並び"])
 
-        else:
-            st.warning("個人データがまだありません")
+        # おすすめ台
+        st.subheader("おすすめ台番号")
+        st.write(df.groupby("台番")["score"].mean().sort_values(ascending=False).head(10))
 
-    except:
-        st.error("個人データシートがまだありません")
+    else:
+        st.warning("DMMデータがまだありません")
