@@ -293,19 +293,57 @@ with tab4:
         if len(df) > 0:
             score_map = {"高":2,"中":1,"低":-1}
             df["score"] = df["評価"].map(score_map)
+            df["台番号"] = df["台番号"].astype(int)
 
+            # -----------------
+            # 曜日別
+            # -----------------
             st.subheader("曜日別 勝率")
             weekday = df.groupby("曜日")["score"].mean()
             st.bar_chart(weekday)
 
+            # -----------------
+            # 機種別
+            # -----------------
             st.subheader("機種別 勝率")
             machine = df.groupby("機種")["score"].mean()
             st.bar_chart(machine)
 
+            # -----------------
+            # 台番号別
+            # -----------------
             st.subheader("台番号別 勝率")
             machine_no = df.groupby("台番号")["score"].mean()
             st.bar_chart(machine_no)
 
+            # -----------------
+            # 末尾分析
+            # -----------------
+            st.subheader("末尾 勝率")
+            df["末尾"] = df["台番号"] % 10
+            sueo = df.groupby("末尾")["score"].mean()
+            st.bar_chart(sueo)
+
+            # -----------------
+            # 並び分析（3台並び）
+            # -----------------
+            st.subheader("並び（3台並び）分析")
+
+            df_sorted = df.sort_values("台番号")
+            df_sorted["並びスコア"] = df_sorted["score"].rolling(3).mean()
+            st.line_chart(df_sorted["並びスコア"])
+
+            # -----------------
+            # 過去の傾向（時系列）
+            # -----------------
+            st.subheader("過去の傾向（評価スコア推移）")
+            df["日時"] = pd.to_datetime(df["日時"])
+            trend = df.sort_values("日時")
+            st.line_chart(trend.set_index("日時")["score"])
+
+            # -----------------
+            # おすすめ台
+            # -----------------
             st.subheader("総合おすすめ台")
             best = machine_no.idxmax()
             st.success(f"おすすめ台：{best}")
