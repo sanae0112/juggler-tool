@@ -302,7 +302,7 @@ with tab4:
     if len(all_data) > 0:
         df = pd.DataFrame(all_data)
 
-        # 評価スコア作成
+        # 評価スコア
         def score(row):
             if row["REG確率"] < 280 and row["合算"] < 120:
                 return 2
@@ -314,30 +314,69 @@ with tab4:
         df["score"] = df.apply(score, axis=1)
         df["台番"] = df["台番"].astype(int)
 
-        # 曜日
-        st.subheader("曜日別")
+        # 日付→曜日
         df["日付"] = pd.to_datetime(df["日付"])
         df["曜日"] = df["日付"].dt.day_name()
-        st.bar_chart(df.groupby("曜日")["score"].mean())
 
-        # 機種
+        # -----------------
+        # 曜日別（横グラフ）
+        # -----------------
+        st.subheader("曜日別")
+
+        weekday_data = df.groupby("曜日")["score"].mean().sort_values()
+
+        fig = go.Figure(go.Bar(
+            x=weekday_data.values,
+            y=weekday_data.index,
+            orientation='h'
+        ))
+        st.plotly_chart(fig, use_container_width=True)
+
+        # -----------------
+        # 機種別（横グラフ）
+        # -----------------
         st.subheader("機種別")
-        st.bar_chart(df.groupby("機種")["score"].mean())
 
-        # 末尾
+        machine_data = df.groupby("機種")["score"].mean().sort_values()
+
+        fig = go.Figure(go.Bar(
+            x=machine_data.values,
+            y=machine_data.index,
+            orientation='h'
+        ))
+        st.plotly_chart(fig, use_container_width=True)
+
+        # -----------------
+        # 末尾（横グラフ）
+        # -----------------
         st.subheader("末尾")
+
         df["末尾"] = df["台番"] % 10
-        st.bar_chart(df.groupby("末尾")["score"].mean())
+        sueo_data = df.groupby("末尾")["score"].mean().sort_values()
 
-        # 並び
-        st.subheader("並び（3台）")
-        df = df.sort_values("台番")
-        df["並び"] = df["score"].rolling(3).mean()
-        st.line_chart(df["並び"])
+        fig = go.Figure(go.Bar(
+            x=sueo_data.values,
+            y=sueo_data.index,
+            orientation='h'
+        ))
+        st.plotly_chart(fig, use_container_width=True)
 
+        # -----------------
+        # 並び分析（3台並び）
+        # -----------------
+        st.subheader("並び（3台並び）")
+
+        df_sorted = df.sort_values("台番")
+        df_sorted["並びスコア"] = df_sorted["score"].rolling(3).mean()
+        st.line_chart(df_sorted["並びスコア"])
+
+        # -----------------
         # おすすめ台
-        st.subheader("おすすめ台番号")
-        st.write(df.groupby("台番")["score"].mean().sort_values(ascending=False).head(10))
+        # -----------------
+        st.subheader("おすすめ台ランキング")
+
+        rank = df.groupby("台番")["score"].mean().sort_values(ascending=False)
+        st.dataframe(rank.head(10))
 
     else:
         st.warning("DMMデータがまだありません")
