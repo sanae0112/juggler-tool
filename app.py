@@ -30,7 +30,7 @@ machine_list = [
 ]
 
 # ==================================================
-# Google Sheets 接続安定版
+# Google Sheets
 # ==================================================
 @st.cache_resource
 def get_gspread_client():
@@ -38,14 +38,11 @@ def get_gspread_client():
         "https://spreadsheets.google.com/feeds",
         "https://www.googleapis.com/auth/drive"
     ]
-
     creds_dict = dict(st.secrets["gcp_service_account"])
     credentials = ServiceAccountCredentials.from_json_keyfile_dict(
         creds_dict, scope
     )
-    client = gspread.authorize(credentials)
-    return client
-
+    return gspread.authorize(credentials)
 
 def connect_sheet(sheet_name, headers=None):
     client = get_gspread_client()
@@ -53,26 +50,26 @@ def connect_sheet(sheet_name, headers=None):
 
     for _ in range(3):
         try:
-            sheet = spreadsheet.worksheet(sheet_name)
-            return sheet
+            return spreadsheet.worksheet(sheet_name)
+
         except WorksheetNotFound:
-            sheet = spreadsheet.add_worksheet(
+            ws = spreadsheet.add_worksheet(
                 title=sheet_name,
-                rows="3000",
+                rows="5000",
                 cols="30"
             )
             if headers:
-                sheet.append_row(headers)
-            return sheet
+                ws.append_row(headers)
+            return ws
+
         except:
             time.sleep(1)
 
     st.error("Google Sheets接続失敗")
     st.stop()
 
-
 # ==================================================
-# 評価
+# 共通関数
 # ==================================================
 def evaluate(spin, big, reg):
     if spin == 0 or (big + reg) == 0:
@@ -88,16 +85,40 @@ def evaluate(spin, big, reg):
     else:
         return "低"
 
+def score_func(reg_prob, gassan):
+    try:
+        if reg_prob < 280 and gassan < 120:
+            return 2
+        elif reg_prob < 330:
+            return 1
+        else:
+            return -1
+    except:
+        return 0
+
+def color_rank(x):
+    if x >= 1.5:
+        return "🔴激アツ"
+    elif x >= 1.0:
+        return "🟠強い"
+    elif x >= 0.3:
+        return "🟡普通"
+    else:
+        return "⚪弱い"
 
 # ==================================================
 # タブ
 # ==================================================
-tab1, tab2, tab3, tab4 = st.tabs(
-    ["①DMMコピペ", "②個人カウント", "③複数台入力", "④ホール分析AI"]
-)
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "①DMMコピペ",
+    "②個人カウント",
+    "③複数台入力",
+    "④ホール分析AI",
+    "⑤並びAI PRO"
+])
 
 # ==================================================
-# ① DMMコピペ保存（10日前まで）
+# ① DMMコピペ保存
 # ==================================================
 with tab1:
     st.header("DMMコピペ保存（本日〜10日前）")
@@ -106,7 +127,6 @@ with tab1:
     paste_data = st.text_area("DMM表貼り付け")
 
     if st.button("コピペデータ保存"):
-
         lines = paste_data.split("\n")
         today = datetime.date.today()
         target_date = today
@@ -124,14 +144,10 @@ with tab1:
 
             elif "日前" in line:
                 m = re.search(r"(\d+)日前", line)
-
                 if m:
                     num = int(m.group(1))
-
-                    if num > 10:
-                        continue
-
-                    target_date = today - datetime.timedelta(days=num)
+                    if num <= 10:
+                        target_date = today - datetime.timedelta(days=num)
                 continue
 
             nums = re.findall(r"-?\d+", line)
@@ -144,8 +160,8 @@ with tab1:
                     spin = int(nums[3])
                     diff = int(nums[4])
 
-                    total_bonus = big + reg
-                    gassan = round(spin / total_bonus, 1) if total_bonus else 0
+                    total = big + reg
+                    gassan = round(spin / total, 1) if total else 0
                     reg_prob = round(spin / reg, 1) if reg > 0 else 0
 
                     date_str = target_date.strftime("%Y-%m-%d")
@@ -167,97 +183,53 @@ with tab1:
                     pass
 
         for date_str, rows in data_by_date.items():
-
             headers = [
                 "台番", "機種", "回転数", "BIG", "REG",
                 "合算", "REG確率", "差枚"
             ]
 
-            df = pd.DataFrame(rows, columns=headers)
+            ws = connect_sheet(date_str, headers)
+            ws.append_rows(rows)
 
-            sheet = connect_sheet(date_str, headers)
-
-            values = df.values.tolist()
-
-            if values:
-                sheet.append_rows(values)
-
-        st.success("本日〜10日前まで保存完了")
-
+        st.success("保存完了")
 
 # ==================================================
-# ② 個人詳細データ
+# ② 個人カウント
 # ==================================================
 with tab2:
     st.header("個人詳細データ")
 
-    machine = st.selectbox("機種", machine_list, key="solo_machine")
+    machine = st.selectbox("機種", machine_list, key="solo")
 
-    col1, col2, col3 = st.columns(3)
-
-    with col1:
-        machine_no = st.text_input("台番号")
-        spin = st.number_input("現在回転", 0)
-        prev_spin = st.number_input("前任者回転", 0)
-
-    st.subheader("🍒チェリー")
-    cherry_free = st.number_input("フリー打ち", 0)
-    cherry_aim = st.number_input("狙い打ち", 0)
-
-    cherry = cherry_aim if cherry_aim > 0 else cherry_free
-
-    st.subheader("🎰ボーナス")
-
-    big_single = st.number_input("単独BIG", 0)
-    big_cherry = st.number_input("チェリーBIG", 0)
-    big_rare = st.number_input("レアチェリーBIG", 0)
-    big_pierrot = st.number_input("ピエロBIG", 0)
-
-    reg_single = st.number_input("単独REG", 0)
-    reg_cherry = st.number_input("チェリーREG", 0)
-    reg_pierrot = st.number_input("ピエロREG", 0)
-
-    big_total = big_single + big_cherry + big_rare + big_pierrot
-    reg_total = reg_single + reg_cherry + reg_pierrot
-
-    st.subheader("🍇小役")
+    machine_no = st.text_input("台番号")
+    spin = st.number_input("現在回転", 0)
+    prev_spin = st.number_input("前任者回転", 0)
 
     grape = st.number_input("ぶどう", 0)
-    pierrot = st.number_input("ピエロ", 0)
-    bell = st.number_input("ベル", 0)
+    cherry = st.number_input("チェリー", 0)
 
-    st.subheader("💰収支")
+    big = st.number_input("BIG", 0)
+    reg = st.number_input("REG", 0)
 
     invest = st.number_input("投資", 0)
     collect = st.number_input("回収", 0)
 
     total_spin = spin + prev_spin
 
-    st.write("総回転:", total_spin)
-
-    if total_spin > 0:
-        if big_total > 0:
-            st.write("BIG確率:", round(total_spin / big_total, 1))
-        if reg_total > 0:
-            st.write("REG確率:", round(total_spin / reg_total, 1))
-        if big_total + reg_total > 0:
-            st.write("合算:", round(total_spin / (big_total + reg_total), 1))
-        if grape > 0:
-            st.write("ぶどう確率:", round(total_spin / grape, 2))
-
     if st.button("個人データ保存"):
+
+        ws = connect_sheet(
+            "個人データ",
+            [
+                "日時","曜日","機種","ホール","台番号",
+                "回転","前任者回転","ぶどう","チェリー",
+                "BIG","REG","投資","回収","評価"
+            ]
+        )
 
         now = datetime.datetime.now()
 
-        headers = [
-            "日時", "曜日", "機種", "ホール", "台番号",
-            "回転", "前任者回転", "ぶどう", "チェリー",
-            "BIG", "REG", "投資", "回収", "評価"
-        ]
-
-        sheet = connect_sheet("個人データ", headers)
-
-        sheet.append_row([
+        ws.append_row([
             now.strftime("%Y-%m-%d %H:%M"),
             now.strftime("%A"),
             machine,
@@ -267,15 +239,14 @@ with tab2:
             prev_spin,
             grape,
             cherry,
-            big_total,
-            reg_total,
+            big,
+            reg,
             invest,
             collect,
-            evaluate(total_spin, big_total, reg_total)
+            evaluate(total_spin, big, reg)
         ])
 
         st.success("保存完了")
-
 
 # ==================================================
 # ③ 複数台入力
@@ -290,13 +261,10 @@ with tab3:
         st.session_state.rows.append({})
 
     for i in range(len(st.session_state.rows)):
-        c1, c2, c3, c4, c5, c6 = st.columns(6)
+        c1,c2,c3,c4,c5,c6 = st.columns(6)
 
         row = {}
-
-        row["機種"] = c1.selectbox(
-            "機種", machine_list, key=f"m{i}"
-        )
+        row["機種"] = c1.selectbox("機種", machine_list, key=f"m{i}")
         row["台番号"] = c2.text_input("台番号", key=f"n{i}")
         row["回転"] = c3.number_input("回転", 0, key=f"s{i}")
         row["BIG"] = c4.number_input("BIG", 0, key=f"b{i}")
@@ -307,16 +275,16 @@ with tab3:
 
     if st.button("他人データ保存"):
 
+        ws = connect_sheet(
+            "他人データ",
+            [
+                "日時","曜日","機種","ホール","台番号",
+                "回転","前任者回転","ぶどう","チェリー",
+                "BIG","REG","投資","回収","評価"
+            ]
+        )
+
         now = datetime.datetime.now()
-
-        headers = [
-            "日時", "曜日", "機種", "ホール", "台番号",
-            "回転", "前任者回転", "ぶどう", "チェリー",
-            "BIG", "REG", "投資", "回収", "評価"
-        ]
-
-        sheet = connect_sheet("他人データ", headers)
-
         values = []
 
         for row in st.session_state.rows:
@@ -327,9 +295,7 @@ with tab3:
                 SHOP_NAME,
                 row["台番号"],
                 row["回転"],
-                0,
-                0,
-                0,
+                0,0,0,
                 row["BIG"],
                 row["REG"],
                 0,
@@ -337,11 +303,47 @@ with tab3:
                 ""
             ])
 
-        if values:
-            sheet.append_rows(values)
-
+        ws.append_rows(values)
         st.success("保存完了")
 
+# ==================================================
+# 共通：DMM読み込み
+# ==================================================
+def load_dmm():
+    client = get_gspread_client()
+    spreadsheet = client.open(SPREADSHEET_NAME)
+    sheets = spreadsheet.worksheets()
+
+    rows = []
+
+    for ws in sheets:
+        if re.match(r"\d{4}-\d{2}-\d{2}", ws.title):
+            try:
+                data = ws.get_all_records()
+
+                for r in data:
+                    r["日付"] = ws.title
+                    rows.append(r)
+
+            except:
+                pass
+
+    if len(rows) == 0:
+        return pd.DataFrame()
+
+    df = pd.DataFrame(rows)
+
+    for c in ["台番","REG確率","合算"]:
+        df[c] = pd.to_numeric(df[c], errors="coerce")
+
+    df = df.dropna(subset=["台番"])
+    df["台番"] = df["台番"].astype(int)
+    df["score"] = df.apply(
+        lambda x: score_func(x["REG確率"], x["合算"]),
+        axis=1
+    )
+
+    return df
 
 # ==================================================
 # ④ ホール分析AI
@@ -349,107 +351,223 @@ with tab3:
 with tab4:
     st.header("ホール分析AI")
 
-    client = get_gspread_client()
-    spreadsheet = client.open(SPREADSHEET_NAME)
-    sheets = spreadsheet.worksheets()
+    df = load_dmm()
 
-    all_data = []
-
-    for ws in sheets:
-        name = ws.title
-
-        if re.match(r"\d{4}-\d{2}-\d{2}", name):
-            try:
-                rows = ws.get_all_records()
-
-                for row in rows:
-                    row["日付"] = name
-                    all_data.append(row)
-
-            except:
-                pass
-
-    if all_data:
-
-        df = pd.DataFrame(all_data)
-
-        for col in ["REG確率", "合算", "台番"]:
-            df[col] = pd.to_numeric(df[col], errors="coerce")
-
-        df = df.dropna(subset=["台番"])
-
-        df["台番"] = df["台番"].astype(int)
-
-        def score(row):
-            try:
-                if row["REG確率"] < 280 and row["合算"] < 120:
-                    return 2
-                elif row["REG確率"] < 330:
-                    return 1
-                else:
-                    return -1
-            except:
-                return 0
-
-        df["score"] = df.apply(score, axis=1)
-
+    if len(df) == 0:
+        st.warning("DMMデータなし")
+    else:
         df["日付"] = pd.to_datetime(df["日付"])
         df["曜日"] = df["日付"].dt.day_name()
 
-        # 曜日別
         st.subheader("曜日別")
-
-        weekday_data = df.groupby("曜日")["score"].mean().sort_values()
+        wk = df.groupby("曜日")["score"].mean().sort_values()
 
         fig = go.Figure(go.Bar(
-            x=weekday_data.values,
-            y=weekday_data.index,
+            x=wk.values,
+            y=wk.index,
             orientation="h"
         ))
         st.plotly_chart(fig, use_container_width=True)
 
-        # 機種別
         st.subheader("機種別")
-
-        machine_data = df.groupby("機種")["score"].mean().sort_values()
+        mc = df.groupby("機種")["score"].mean().sort_values()
 
         fig = go.Figure(go.Bar(
-            x=machine_data.values,
-            y=machine_data.index,
+            x=mc.values,
+            y=mc.index,
             orientation="h"
         ))
         st.plotly_chart(fig, use_container_width=True)
 
-        # 末尾
         st.subheader("末尾")
-
         df["末尾"] = df["台番"] % 10
-
-        sueo = df.groupby("末尾")["score"].mean().sort_values()
+        su = df.groupby("末尾")["score"].mean().sort_values()
 
         fig = go.Figure(go.Bar(
-            x=sueo.values,
-            y=sueo.index,
+            x=su.values,
+            y=su.index,
             orientation="h"
         ))
         st.plotly_chart(fig, use_container_width=True)
 
-        # 並び
-        st.subheader("並び（3台）")
-
-        temp = df.sort_values("台番")
-        temp["並び"] = temp["score"].rolling(3).mean()
-
-        st.line_chart(temp["並び"])
-
-        # ランキング
-        st.subheader("おすすめ台ランキング")
-
+        st.subheader("おすすめ台")
         rank = df.groupby("台番")["score"].mean().sort_values(
             ascending=False
         )
-
         st.dataframe(rank.head(10))
 
-    else:
-        st.warning("DMMデータがまだありません")
+# ==================================================
+# ⑤ 並びAI PRO
+# ==================================================
+with tab5:
+    st.header("並びAI PRO【上尾UNO専用】")
+
+    df = load_dmm()
+
+    if len(df) == 0:
+        st.warning("DMMデータなし")
+        st.stop()
+
+    machine_map = {
+        "ネオアイムジャグラー":
+            list(range(640,648)) +
+            list(range(662,670)) +
+            list(range(728,735)),
+
+        "マイジャグラーV":
+            list(range(648,662)),
+
+        "ミスタージャグラー":
+            list(range(685,688)),
+
+        "ウルトラミラクルジャグラー":
+            list(range(688,692)),
+
+        "ジャグラーガールズ":
+            list(range(692,699)),
+
+        "ファンキージャグラー2":
+            list(range(699,709)),
+
+        "ハッピージャグラーV3":
+            list(range(721,728))
+    }
+
+    def make_rank(data, span=3):
+        tmp = data.groupby("台番")["score"].mean().reset_index()
+        score_map = dict(zip(tmp["台番"], tmp["score"]))
+        nums = sorted(score_map.keys())
+
+        rows = []
+
+        for i in range(len(nums)-span+1):
+            g = nums[i:i+span]
+
+            if g[-1] - g[0] == span-1:
+                avg = round(
+                    sum(score_map[n] for n in g) / span, 2
+                )
+
+                rows.append([
+                    f"{g[0]}-{g[-1]}",
+                    avg,
+                    color_rank(avg)
+                ])
+
+        if len(rows) == 0:
+            return pd.DataFrame(
+                columns=["台番範囲","平均スコア","評価"]
+            )
+
+        r = pd.DataFrame(
+            rows,
+            columns=["台番範囲","平均スコア","評価"]
+        )
+
+        return r.sort_values(
+            "平均スコア",
+            ascending=False
+        ).head(10)
+
+    # ---------------------------
+    # 機種内3台
+    # ---------------------------
+    st.subheader("機種内3台 TOP10")
+
+    box = []
+
+    for mc, nums in machine_map.items():
+        temp = df[df["台番"].isin(nums)]
+        r = make_rank(temp, 3)
+
+        if len(r):
+            r["機種"] = mc
+            box.append(r)
+
+    final3 = pd.concat(box).sort_values(
+        "平均スコア",
+        ascending=False
+    ).head(10)
+
+    st.dataframe(final3)
+
+    # ---------------------------
+    # 跨ぎ3台
+    # ---------------------------
+    st.subheader("跨ぎ3台 TOP10")
+    cross3 = make_rank(df, 3)
+    st.dataframe(cross3)
+
+    # ---------------------------
+    # 機種内2台
+    # ---------------------------
+    st.subheader("機種内2台 TOP10")
+
+    box2 = []
+
+    for mc, nums in machine_map.items():
+        temp = df[df["台番"].isin(nums)]
+        r = make_rank(temp, 2)
+
+        if len(r):
+            r["機種"] = mc
+            box2.append(r)
+
+    final2 = pd.concat(box2).sort_values(
+        "平均スコア",
+        ascending=False
+    ).head(10)
+
+    st.dataframe(final2)
+
+    # ---------------------------
+    # 跨ぎ2台
+    # ---------------------------
+    st.subheader("跨ぎ2台 TOP10")
+    cross2 = make_rank(df, 2)
+    st.dataframe(cross2)
+
+    # ---------------------------
+    # シート保存（1シート集約）
+    # ---------------------------
+    if st.button("ランキング保存"):
+
+        ws = connect_sheet(
+            "並びAIランキング",
+            [
+                "保存日",
+                "種類",
+                "順位",
+                "台番範囲",
+                "機種",
+                "平均スコア",
+                "評価"
+            ]
+        )
+
+        today = datetime.date.today().strftime("%Y-%m-%d")
+        values = []
+
+        def push_rows(name, data):
+            for i, row in data.reset_index(drop=True).iterrows():
+
+                machine = row["機種"] if "機種" in row else "混合"
+
+                values.append([
+                    today,
+                    name,
+                    i+1,
+                    row["台番範囲"],
+                    machine,
+                    row["平均スコア"],
+                    row["評価"]
+                ])
+
+        push_rows("機種内3台", final3)
+        push_rows("跨ぎ3台", cross3)
+        push_rows("機種内2台", final2)
+        push_rows("跨ぎ2台", cross2)
+
+        ws.append_rows(values)
+
+        st.success("ランキング保存完了")
